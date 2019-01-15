@@ -2,27 +2,6 @@
 ## ChIP-Seq pipeline ##
 #######################
 
-# environment setting
-
-# parameters and experiment conditions
-treatmentCondtions = 2 # numbers of biological replicates
-
-blacklisted_regions
-
-
-
-
-
-
-
-
-# library
-library(markdown)
-library(ggplot2)
-
-
-# scripts 
-
 
 
 ########################
@@ -44,10 +23,10 @@ library(ggplot2)
 #####################################
 
 # 1. FastQC - filter low quality reads
-
+#
 # 2. end trimming - trim the low quality nucleotides at the end
 #                 - sickle, https://github.com/najoshi/sickle
-
+#
 # 3. library complexity - can be corrected by systematic identification and removal 
 #                         of redundant reads, which is implemented in many peak
 #                         callers as it may improve their specificity.
@@ -81,9 +60,7 @@ library(ggplot2)
 #             BWA
 #             SOAP
 #             MAQ
-
-
-
+#
 # - singal-to-noise ratio (SNR) of ChIP-Seq experiments to detect possible 
 #   failure modes of ChIP-seq: 
 #                      1. insufficient enrichment by immunoprecipitation step;
@@ -92,15 +69,9 @@ library(ggplot2)
 # - SNR can be checked by:
 #   1. quality metrix, such as strand cross-correlation (built into some peak 
 #      callers, e.g. SPP or MACS version 2);
-#   2. IP enrichment estimation using CHANCE.
-
-
-
-
-
-
-
-
+#   2. IP enrichment estimation using CHANCE, comparing the IP reads pulled down
+#      by the antibody and the background using the signal extraction scaling.
+#
 
 ################
 # Peak Calling #
@@ -108,24 +79,68 @@ library(ggplot2)
 
 # to predict the regions of the genome where the ChIPed protein is bound by
 # finding regions with significant numbers of mapped reads (peaks).
-
+#
 # A fine balance between sensitivity and specificity depends on choosing an appropriate 
 # peak-calling algorithm and normalization method
-
+#
 # algorithms to choose based on the type of protein ChIPed:
-#   a. point-source factors such as most TFs (Box 3):
+#   a. point-source factors such as most TFs:
 #        ChIP-seq data of point-source factors are the most abundant type, 
 #        most peak callers are designed and fine-tuned for these factors.
-
-
-#   b. broadly enriched factors such as histone marks (Box 4);
 #
-#   c. those with both characteristics such as RNA Pol II (Box 5) [20].
+# Most peak-calling algorithms apply a window-based method to detect peaks,
+# so nearby binding events may be erroneously merged. Peak shape is used as a clue.
+#   - PeakSpliter: look for local maxima in broader region containing serveral sub-peaks
+#   - GPS: probablistic model of the distribution of ChIP-seq read at given peak
+#          candidate regions to deconvolve nearby homotypic events.
+#   - polyaPeak (R) and NarrowPeaks (R): analyze the shape of the peaks to re-rank 
+#          and narrow down the final peak list, respectively.
+#   - Recommended to do a post-processing step after general peak calling for
+#     point-source factors.
+#
+#   b. broadly enriched factors such as histone marks:
+#      Some makrs are enriched strongly in narrow genomic regions (e.g., H3K4me3), 
+#      however, most histone marks tend to have more broadly spreading and weaker
+#      patterns (e.g., H3K27me3).
+#      - SICER
+#      - CCAT
+#      - ZINBA
+#      - RSEG
+#      - Other peak callers including SPP, MACS (version 2), and ReakRanger can 
+#        also be used with this type of ChIP-seq data by using their options to 
+#        increase "bandwidth" or to relax the "peak cutoff."
+#
+#   c. those with both characteristics such as RNA Pol II; mixed signals
+#      - SPP, MACS, ZINBA, PeakRanger: have options for both narrow and broad 
+#                                      wpeak calling
 # 
+# Normalization:
+# - linear: 
+#     1. scaling factor to make the total reads in different samples the same.
+#     2. modified version: a scale factor is estimated in a region (~10Kb) using
+#        linear regression
+#     3. focusing on normalization against control samples.
+#        - CisGenome
+#        - MACS
+#        - USeq
+#     4. RPKM (Reads per Kilobase of sequence range per Million mapped reads):
+#        adjusts for biases due to the higher probability of reads falling into
+#        longer regions.
+# - nonlinear:
+#     1. LOESS (locally weighted regression): assume the effect of biological
+#        condition change does not cause global binding alterations.
+#     2. MAnorm: assume peaks common in the two conditions do not undergo global
+#        changes
+#     3. POLYPHEMUS: implementing nonlinear method and a Quantile normalization
 #
+# Duplicate reads
+#   Duplicate (identical) reads present a challenge because they can arise from
+#   independent DNA fragments (signal) or by PCR amplification of a single fragment
+#   (noise). 
 
-
-# Assessment of Reproducibility
+#################################
+# Assessment of Reproducibility #
+#################################
 
 # Reproducibility of overall paterns
 # 1. At least two biological replicates of each ChIP-seq experiments
@@ -142,39 +157,54 @@ library(ggplot2)
 # with low quality.
 #
 
-
-
-
 ############
 # Analysis #
 ############
 
-# A. Annotation
-
-
-
-
+# A. Peak Annotation
+#    format: BED or GFF for peaks; WIG or bedGraph for normalized read coverage
+#    softwares:
+#      - BEDTools: compute the distance from each peak to the nearest landmark
+#      - CEAS or ChIPpeakAnno (Bioconductor): correlate with expression data or 
+#                  subject to a gene ontology analysis
+#
+#
+#
 # B. Differetial Representation
-# Methods:
+# Methodologies: assume significant and reproducible peaks
 #   1. simple binary overlap of two sets does not represent the optimal approach
 #      when comparing peaks.
 #        - BEDTools
 #   2. one-qualitative-implements hypothesis testing on multiple overlapping sets 
 #      of peaks, extending the two-set overlap approach.
+#   3. one-qualitative-proposes the analysis of differential binding between
+#      conditions based on the total counts of reads in peak regions or on the 
+#      read densities
+#        - DBChIP: read counts
 #
-
-
-
-
+#        - MAnorm: read densities; computes over peak regions, with higher computation
+#                  cost, providing precise statistical assessment of differential 
+#                  binding across conditions.
+#                  assumes that common peaks in both conditions do not change 
+#                  significantly.
+#
+#        - DIME: assumes a significant proportion of peaks are common to the condition
+#                under comparison
+#
+#        - ChIPDiff: based on protein ChIPed; for histone marks
+#
+#        - POLYPHEMUS: based on protein ChIPed; for RNA Pol II
+#
 # C. Motif Identificaiton & Discovery
-
-
-
-
+#   Some motif discovery algorithm form part of pipelines that perform several
+#   motif analysis steps
+#   - MEME-ChIP
+#   - peak-motifs
+#
 # D. Integrative Analysis
-
-
-
-
-
+#
+#
+#
+#
+#
 
