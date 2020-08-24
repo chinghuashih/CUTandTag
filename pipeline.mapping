@@ -68,8 +68,8 @@ do
 	echo "trimming $sample by fastp"
 	if [ "$libraryType" == "SE" ]; then
 		~/tools/fastp/fastp \
-			-i $sample.R1.fastq.gz \
-			-o $sample.R1_trim.fastq.gz \
+			-i ${sample}.R1.fastq.gz \
+			-o ${sample}.R1_trim.fastq.gz \
 			--trim_poly_g \
 			-x \
 			--cut_window_size 4 \
@@ -78,10 +78,10 @@ do
 
 	elif [ "$libraryType" == "PE" ]; then
 		~/tools/fastp/fastp \
-			--in1 $sample.R1.fastq.gz \
-			--in2 $sample.R2.fastq.gz \
-			--out1 $sample.R1_trim.fastq.gz \
-			--out2 $sample.R2_trim.fastq.gz \
+			--in1 ${sample}.R1.fastq.gz \
+			--in2 ${sample}.R2.fastq.gz \
+			--out1 ${sample}.R1_trim.fastq.gz \
+			--out2 ${sample}.R2_trim.fastq.gz \
 			--trim_poly_g \
 			-x \
 			--cut_window_size 4 \
@@ -91,14 +91,21 @@ do
 		echo "wrong library type"
 	fi
 
-	mv fastp.html $sample.fastp.html
-	mv fastp.json $sample.fastp.json
+	mv fastp.html ${sample}.fastp.html
+	mv fastp.json ${sample}.fastp.json
 	echo ""
 done
 
 #######################
 ## mapping - bowtie2 ##
 #######################
+
+# option: merge replicates: cat
+
+mkdir -p alignment/sam/bowtie2_summary
+mkdir -p alignment/bam
+mkdir -p alignment/bed
+mkdir -p alignment/bedgraph
 
 for sample in ${sampleFiles[*]}
 do
@@ -112,8 +119,22 @@ do
 			-S $sample.fastp_trim.sam \
 			--no-unal \
 			--local \
-			--very-sensitive-local
+			--very-sensitive
 		echo ""
+
+# checking
+bowtie2 \
+	--end-to-end \
+	--no-mixed \
+	--no-discordant \
+	--phred33 \
+	-I 10 \
+	-X 700 \
+	-p ${cores} \
+	-x ${ref} \
+	-1 fastq/${histName}_R1.fastq.gz \
+	-2 fastq/${histName}_R2.fastq.gz \
+	-S alignment/sam/${histName}_bowtie2.sam &> alignment/sam/bowtie2_summary/${histName}_bowtie2.txt
 
 		echo "mapping $sample to E. coli"
 		bowtie2 -t -p $numberOfProcessors \
