@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH -p standard -o mapping.bowtie2.log -t 16:00:00
+#SBATCH -p standard -o chipseq.mapping.bowtie2.log -t 16:00:00
 #SBATCH -c 12 --mem=144G
 
 #################################################################################################################
 # required files:
 #                 1. fastq/fastq.gz
-#                 2. the reference genome, here, hg19 is used
+#                 2. the reference genome
 #                 3. annotation files: gtf and bed formats
 #                 4. samples.txt: contains samples' names, one per each line
 # Notice:
@@ -33,7 +33,7 @@ libraryType="PE"
 numberOfSamples=12
 
 # references
-reference_hg19="/home/cshih8/references/hg19_bowtie2/hg19"
+reference="/home/cshih8/references/hg19_bowtie2/hg19"
 reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 
@@ -51,11 +51,11 @@ sampleFiles=$(<samples.txt)
 dupMarkBamfiles=$(<dupMarkBamfiles.txt)
 
 echo "Samples are:"
-echo $sampleFiles
-echo "libraryType: $libraryType"
-echo "bwBinSize = $bwBinSize"
-echo "maximun fragment length: $maxin"
-echo "mapping quality cut-off: $mappingQuality"
+echo ${sampleFiles}
+echo "libraryType: ${libraryType}"
+echo "bwBinSize = ${bwBinSize}"
+echo "maximun fragment length: ${maxin}"
+echo "mapping quality cut-off: ${mappingQuality}"
 echo ""
 echo ""
 
@@ -66,10 +66,10 @@ echo ""
 for sample in ${sampleFiles[*]}
 do
 	echo "trimming $sample by fastp"
-	if [ "$libraryType" == "SE" ]; then
+	if [ "${libraryType}" == "SE" ]; then
 		~/tools/fastp/fastp \
-			-i ${sample}.R1.fastq.gz \
-			-o ${sample}.R1_trim.fastq.gz \
+			-i ${sample}.fastq.gz \
+			-o ${sample}.trim.fastq.gz \
 			--trim_poly_g \
 			-x \
 			--cut_window_size 4 \
@@ -109,14 +109,15 @@ mkdir -p alignment/bedgraph
 
 for sample in ${sampleFiles[*]}
 do
-	echo "mapping $sample"
+	echo "mapping ${sample}"
 
 	if [ "$libraryType" == "SE" ]; then
-		echo "mapping $sample to hg19"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_hg19 \
-			-U $sample.R1_trim.fastq.gz \
-			-S $sample.fastp_trim.sam \
+		echo "mapping ${sample} to human genome"
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference} \
+			-U ${sample}.trim.fastq.gz \
+			-S ${sample}.fastp_trim.sam \
 			--no-unal \
 			--local \
 			--very-sensitive
@@ -136,76 +137,81 @@ bowtie2 \
 	-2 fastq/${histName}_R2.fastq.gz \
 	-S alignment/sam/${histName}_bowtie2.sam &> alignment/sam/bowtie2_summary/${histName}_bowtie2.txt
 
-		echo "mapping $sample to E. coli"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_ecoli \
-			-U $sample.R1_trim.fastq.gz \
-			-S $sample.ecoli.sam \
+		echo "mapping ${sample} to E. coli"
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference_ecoli} \
+			-U ${sample}.trim.fastq.gz \
+			-S ${sample}.ecoli.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local
 		echo ""
 
-		echo "mapping $sample to phix"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_phix \
-			-U $sample.R1_trim.fastq.gz \
-			-S $sample.phix.sam \
+		echo "mapping ${sample} to phix"
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference_phix} \
+			-U ${sample}.trim.fastq.gz \
+			-S ${sample}.phix.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local
 		echo ""
 
-	elif [ "$libraryType" == "PE" ]; then
-		echo "mapping $sample to hg19"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_hg19 \
-			-1 $sample.R1_trim.fastq.gz -2 $sample.R2_trim.fastq.gz \
-			-S $sample.fastp_trim.sam \
+	elif [ "${libraryType}" == "PE" ]; then
+		echo "mapping ${sample} to human genome"
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference} \
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.fastp_trim.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins $maxin
+			--maxins ${maxin}
 		echo ""
 
 		echo "mapping $sample to E. coli"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_ecoli \
-			-1 $sample.R1_trim.fastq.gz -2 $sample.R2_trim.fastq.gz \
-			-S $sample.ecoli.sam \
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference_ecoli} \
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.ecoli.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins $maxin
+			--maxins ${maxin}
 		echo ""
 
 		echo "mapping $sample to phiX"
-		bowtie2 -t -p $numberOfProcessors \
-			-x $reference_phix \
-			-1 $sample.R1_trim.fastq.gz -2 $sample.R2_trim.fastq.gz \
-			-S $sample.phix.sam \
+		bowtie2 -t \
+			-p ${numberOfProcessors} \
+			-x ${reference_phix} \
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.phix.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins $maxin
+			--maxins ${maxin}
 		echo ""
 	else
 		echo "wrong library type"
 	fi
 
-	echo "filtering $sample with mapping quality < $mappingQuality, remove mitochrondria and unassembled contigs"
+	echo "filtering ${sample} with mapping quality < ${mappingQuality}, remove mitochrondria and unassembled contigs"
   
-  # Need to add an option for filtering: unconventional chromosomes, chrY, and chrM
+  	# Need to add an option for filtering: unconventional chromosomes, chrY, and chrM
 	sed '/chrM/d;/chrY/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
 	# sed '/chrM/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
-  
-  samtools view -bSq $mappingQuality $sample.filtered.sam > $sample.filtered.bam
+#######  
+  	samtools view -bSq $mappingQuality $sample.filtered.sam > $sample.filtered.bam
 	samtools view -bSq $mappingQuality $sample.ecoli.sam > $sample.ecoli10.bam
 	samtools view -bSq $mappingQuality $sample.phix.sam > $sample.phix10.bam
 	echo ""
