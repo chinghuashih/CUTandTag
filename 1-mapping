@@ -17,11 +17,20 @@
 #########################################
 ## loading modules: required for slurm ##
 #########################################
+
+# mapping and bam file processing
 module load bowtie2
 module load samtools
 module load picard
+
+# QC and visualization
+module load fastp
+module load fastqc
 module load deeptools
+
+# misc
 module load java
+module load perl
 
 #######################
 ## parameter setting ##
@@ -30,10 +39,8 @@ module load java
 libraryType="PE"
 # SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
 
-numberOfSamples=12
-
 # references
-reference="/home/cshih8/references/hg19_bowtie2/hg19"
+reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
 reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 
@@ -44,14 +51,15 @@ maxin=700
 numberOfProcessors=12
 
 # import the sample list
-awk '{print $0=$0".bam"}' < samples.txt > bamfiles.txt
+awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
 awk '{print $0=$0".dupMark.bam"}' < samples.txt > dupMarkBamfiles.txt
+awk '{print $0=$0".dedup.bam"}'   < samples.txt > dedupBamfiles.txt
 
 sampleFiles=$(<samples.txt)
 dupMarkBamfiles=$(<dupMarkBamfiles.txt)
+dedupBamfiles=$(<dedupBamfiles.txt)
 
-echo "Samples are:"
-echo ${sampleFiles}
+echo "Samples are: ${sampleFiles}"
 echo "libraryType: ${libraryType}"
 echo "bwBinSize = ${bwBinSize}"
 echo "maximun fragment length: ${maxin}"
@@ -63,13 +71,18 @@ echo ""
 ## QC1 - raw sequences ##
 #########################
 
+mkdir -p QC/fastqc
+mkdir -p QC/fastp
+mkdir -p QC/bamqc
+mkdir -p QC/misc
+
 for sample in ${sampleFiles[*]}
 do
 	echo "trimming $sample by fastp"
 	if [ "${libraryType}" == "SE" ]; then
-		~/tools/fastp/fastp \
-			-i ${sample}.fastq.gz \
-			-o ${sample}.trim.fastq.gz \
+		fastp \
+			-i ${sample}.R1.fastq.gz \
+			-o ${sample}.R1_trim.fastq.gz \
 			--trim_poly_g \
 			-x \
 			--cut_window_size 4 \
@@ -91,8 +104,8 @@ do
 		echo "wrong library type"
 	fi
 
-	mv fastp.html ${sample}.fastp.html
-	mv fastp.json ${sample}.fastp.json
+	mv fastp.html ./QC/fastp/${sample}.fastp.html
+	mv fastp.json ./QC/fastp/${sample}.fastp.json
 	echo ""
 done
 
@@ -100,12 +113,16 @@ done
 ## mapping - bowtie2 ##
 #######################
 
-# option: merge replicates: cat
+# to do: option: merge replicates: cat
 
-mkdir -p alignment/sam/bowtie2_summary
-mkdir -p alignment/bam
-mkdir -p alignment/bed
-mkdir -p alignment/bedgraph
+#mkdir -p alignment/bed
+#mkdir -p alignment/bedgraph
+
+mkdir -p bamFiles
+mkdir -p bamFiles.ecoli
+mkdir -p bamFiles.phix
+mkdir -p bamFiles.chrM
+mkdir -p QC/bowtie2_summary
 
 for sample in ${sampleFiles[*]}
 do
@@ -116,11 +133,12 @@ do
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference} \
-			-U ${sample}.trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam \
 			--no-unal \
 			--local \
-			--very-sensitive
+			--very-sensitive \
+			-U ${sample}.R1_trim.fastq.gz \
+			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${histName}_bowtie2.txt
+			
 		echo ""
 
 # checking
@@ -218,12 +236,6 @@ bowtie2 \
 
 	echo "samtools flagstat $sample.filtered.bam"
 	samtools flagstat $sample.filtered.bam
-	echo ""
-	echo "samtools flagstat $sample.ecoli10.bam"
-	samtools flagstat $sample.ecoli10.bam
-	echo ""
-	echo "samtools flagstat $sample.phix10.bam"
-	samtools flagstat $sample.phix10.bam
 	echo ""
 
 	rm -f $sample.*.sam
