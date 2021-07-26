@@ -59,7 +59,8 @@ sampleFiles=$(<samples.txt)
 dupMarkBamfiles=$(<dupMarkBamfiles.txt)
 dedupBamfiles=$(<dedupBamfiles.txt)
 
-echo "Samples are: ${sampleFiles}"
+echo "Samples are:"
+echo "${sampleFiles}"
 echo "libraryType: ${libraryType}"
 echo "bwBinSize = ${bwBinSize}"
 echo "maximun fragment length: ${maxin}"
@@ -137,33 +138,19 @@ do
 			--local \
 			--very-sensitive \
 			-U ${sample}.R1_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${histName}_bowtie2.txt
+			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
 			
 		echo ""
-
-# checking
-bowtie2 \
-	--end-to-end \
-	--no-mixed \
-	--no-discordant \
-	--phred33 \
-	-I 10 \
-	-X 700 \
-	-p ${cores} \
-	-x ${ref} \
-	-1 fastq/${histName}_R1.fastq.gz \
-	-2 fastq/${histName}_R2.fastq.gz \
-	-S alignment/sam/${histName}_bowtie2.sam &> alignment/sam/bowtie2_summary/${histName}_bowtie2.txt
 
 		echo "mapping ${sample} to E. coli"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_ecoli} \
-			-U ${sample}.trim.fastq.gz \
-			-S ${sample}.ecoli.sam \
 			--no-unal \
 			--local \
-			--very-sensitive-local
+			--very-sensitive-local \
+			-U ${sample}.trim.fastq.gz \
+			-S ${sample}.ecoli.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
 		echo ""
 
 		echo "mapping ${sample} to phix"
@@ -171,10 +158,10 @@ bowtie2 \
 			-p ${numberOfProcessors} \
 			-x ${reference_phix} \
 			-U ${sample}.trim.fastq.gz \
-			-S ${sample}.phix.sam \
 			--no-unal \
 			--local \
-			--very-sensitive-local
+			--very-sensitive-local \
+			-S ${sample}.phix.sam  &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
 		echo ""
 
 	elif [ "${libraryType}" == "PE" ]; then
@@ -182,16 +169,19 @@ bowtie2 \
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference} \
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins ${maxin}
+			--maxins ${maxin} \			
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
 		echo ""
 
+
+
+=check
 		echo "mapping $sample to E. coli"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
