@@ -216,7 +216,7 @@ do
 	echo "filtering ${sample} with mapping quality < ${mappingQuality}, remove mitochrondria and unassembled contigs"
   
   	# Need to add an option for filtering: unconventional chromosomes, chrY, and chrM
-	sed '/chrM/d;/chrY/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
+	sed '/chrM/d;/chrY/d;/chrEBV/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
 	# sed '/chrM/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
 #######  
   	samtools view -bSq $mappingQuality $sample.filtered.sam > $sample.filtered.bam
