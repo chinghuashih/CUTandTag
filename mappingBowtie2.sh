@@ -43,12 +43,18 @@ libraryType="PE"
 reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
 reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
+#PICARD="/software/picard/2.12.0/picard.jar"
 
 # programs
 bwBinSize=10
 mappingQuality=10
 maxin=700
 numberOfProcessors=12
+threads=12
+
+# fastp parameters
+cutWindowSize=4
+lengthRequired=35
 
 # import the sample list
 awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
@@ -77,18 +83,29 @@ mkdir -p QC/fastp
 mkdir -p QC/bamqc
 mkdir -p QC/misc
 
+for FILE in *.gz
+do
+	echo "fastqc: ${FILE}"
+	fastqc "${FILE}" \
+		--threads $(echo ${numberOfProcessors}/3 | bc) \
+		--outdir QC/fastqc \
+		--quiet
+	echo ""
+done
+
 for sample in ${sampleFiles[*]}
 do
-	echo "trimming $sample by fastp"
+	# running fastp
+	echo "QC and trimming ${sample} by fastp"
 	if [ "${libraryType}" == "SE" ]; then
 		fastp \
 			-i ${sample}.R1.fastq.gz \
 			-o ${sample}.R1_trim.fastq.gz \
 			--trim_poly_g \
 			-x \
-			--cut_window_size 4 \
+			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required 35
+			--length_required ${lengthRequired}
 
 	elif [ "$libraryType" == "PE" ]; then
 		~/tools/fastp/fastp \
@@ -98,15 +115,15 @@ do
 			--out2 ${sample}.R2_trim.fastq.gz \
 			--trim_poly_g \
 			-x \
-			--cut_window_size 4 \
+			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required 35
+			--length_required ${lengthRequired}
 	else
 		echo "wrong library type"
 	fi
 
-	mv fastp.html ./QC/fastp/${sample}.fastp.html
-	mv fastp.json ./QC/fastp/${sample}.fastp.json
+	mv fastp.html QC/fastp/${sample}.fastp.html
+	mv fastp.json QC/fastp/${sample}.fastp.json
 	echo ""
 done
 
@@ -116,13 +133,10 @@ done
 
 # to do: option: merge replicates: cat
 
-#mkdir -p alignment/bed
-#mkdir -p alignment/bedgraph
-
 mkdir -p bamFiles
 mkdir -p bamFiles.ecoli
 mkdir -p bamFiles.phix
-mkdir -p bamFiles.chrM
+#mkdir -p bamFiles.chrM
 mkdir -p QC/bowtie2_summary
 
 for sample in ${sampleFiles[*]}
@@ -138,7 +152,7 @@ do
 			--local \
 			--very-sensitive \
 			-U ${sample}.R1_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
+			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
 			
 		echo ""
 
@@ -150,7 +164,7 @@ do
 			--local \
 			--very-sensitive-local \
 			-U ${sample}.trim.fastq.gz \
-			-S ${sample}.ecoli.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
+			-S ${sample}.ecoli.sam &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
 		echo "mapping ${sample} to phix"
@@ -161,7 +175,7 @@ do
 			--no-unal \
 			--local \
 			--very-sensitive-local \
-			-S ${sample}.phix.sam  &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
+			-S ${sample}.phix.sam  &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 
 	elif [ "${libraryType}" == "PE" ]; then
@@ -176,38 +190,35 @@ do
 			--no-discordant \
 			--maxins ${maxin} \			
 			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam &> ./QC/bowtie2_summary/${sample}_bowtie2.txt
+			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
 
-
-
-=check
 		echo "mapping $sample to E. coli"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_ecoli} \
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.ecoli.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins ${maxin}
+			--maxins ${maxin} \
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.ecoli.sam  &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
 		echo "mapping $sample to phiX"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_phix} \
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.phix.sam \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins ${maxin}
+			--maxins ${maxin} \
+			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-S ${sample}.phix.sam &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 	else
 		echo "wrong library type"
@@ -217,18 +228,20 @@ do
   
   	# Need to add an option for filtering: unconventional chromosomes, chrY, and chrM
 	sed '/chrM/d;/chrY/d;/chrEBV/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
-	# sed '/chrM/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
-#######  
-  	samtools view -bSq $mappingQuality $sample.filtered.sam > $sample.filtered.bam
-	samtools view -bSq $mappingQuality $sample.ecoli.sam > $sample.ecoli10.bam
-	samtools view -bSq $mappingQuality $sample.phix.sam > $sample.phix10.bam
+  	samtools view -bSq ${mappingQuality} ${sample}.filtered.sam        > ${sample}.filtered.bam
+	samtools view -bSq ${mappingQuality} ${sample}.ecoli.sam           > ${sample}.ecoli10.bam
+	samtools view -bSq ${mappingQuality} ${sample}.phix.sam            > ${sample}.phix10.bam
+#	samtools view -bSq ${mappingQuality} ${sample}.fastp_trim.sam chrM > ${sample}.chrM.bam
 	echo ""
 
-	echo "samtools flagstat $sample.filtered.bam"
-	samtools flagstat $sample.filtered.bam
+	echo "samtools flagstat ${sample}.filtered.bam"
+	samtools flagstat ${sample}.filtered.bam
 	echo ""
 
-	rm -f $sample.*.sam
+	rm -f ${sample}.*.sam
+	mv ${sample}.ecoli10.bam bamFiles.ecoli
+	mv ${sample}.phix10.bam  bamFiles.phix
+#	mv ${sample}.chrM.bam    bamFiles.chrM
 done
 
 ##########################
@@ -237,28 +250,33 @@ done
 
 for sample in ${sampleFiles[*]}
 do
-	echo "sorting $sample by picard"
-	java -Xmx10g -Xmx16G -jar /software/picard/2.12.0/picard.jar SortSam \
-		I=$sample.filtered.bam \
-		O=$sample.sorted.bam \
+	echo "sorting ${sample} by picard"
+#	java -Xmx10g -Xmx16G -jar ${PICARD} SortSam \
+	java -jar ${PICARD} SortSam \
+		I=${sample}.filtered.bam \
+		O=${sample}.sorted.bam \
 		TMP_DIR=tmp \
 		SORT_ORDER=coordinate
-	rm -f $sample.filtered.bam
+	rm -f ${sample}.filtered.bam
 	echo ""
 
-	echo "marking duplicates in $sample and indexing"
-	java -Xmx10g -Xmx16G -jar /software/picard/2.12.0/picard.jar MarkDuplicates \
-		I=$sample.sorted.bam \
-		O=$sample.dupMark.bam \
+	echo "marking duplicates in ${sample} and indexing"
+#	java -Xmx10g -Xmx16G -jar ${PICARD} MarkDuplicates \
+	java -jar ${PICARD} MarkDuplicates \
+		I=${sample}.sorted.bam \
+		O=${sample}.dupMark.bam \
 		TMP_DIR=tmp \
-		METRICS_FILE=$sample.dupMark.metrics
-	samtools index $sample.dupMark.bam
-	rm -f $sample.sorted.bam
+		METRICS_FILE=${sample}.dupMark.metrics
+	samtools index ${sample}.dupMark.bam
+	rm -f ${sample}.sorted.bam
 	echo ""
 
-	echo "check bam files of $sample by bamqc"
-	~/tools/BamQC/bin/bamqc $sample.fastp_trim.bam
-	~/tools/BamQC/bin/bamqc $sample.dupMark.bam
+	echo "check bam files of ${sample} by bamqc"
+	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
+	echo ""
+	
+	mv *.metrics QC/misc/
+	mv *_bamqc   QC/bamqc/
 	echo ""
 done
 
@@ -269,12 +287,15 @@ done
 ######################################################################################
 ## multiBamSummary: similarity of read distribution in different sequencing samples ##
 ######################################################################################
+
+mkdir -p QC/multiBamSummary
+
 echo "multiBamSummary"
 multiBamSummary bins \
-	--numberOfProcessors $numberOfProcessors \
-	--bamfiles $dupMarkBamfiles \
-	--labels $sampleFiles \
-	--minMappingQuality $mappingQuality \
+	--numberOfProcessors ${numberOfProcessors} \
+	--bamfiles ${dupMarkBamfiles} \
+	--labels ${sampleFiles} \
+	--minMappingQuality ${mappingQuality} \
 	-o multiBamSummary.results.npz
 echo ""
 
@@ -288,7 +309,7 @@ echo ""
 #	-o PCA_readCounts.png
 #echo ""
 
-echo "plot heatmap"
+echo "plot heatmap for Spearman Correlation"
 plotCorrelation \
 	-in multiBamSummary.results.npz \
 	--corMethod spearman \
@@ -301,27 +322,32 @@ plotCorrelation \
 	--outFileCorMatrix SpearmanCorr_readCounts.tab
 echo ""
 
+mv multiBamSummary.dupMark.results.npz         QC/multiBamSummary/
+mv SpearmanCorr_readCounts.dupMark.tab         QC/multiBamSummary/
+mv heatmap_SpearmanCorr_readCounts.dupMark.png QC/multiBamSummary/
+
+==check
 ##############################################
 ## plotCoverage: coverage of the sequencing ##
 ##############################################
 echo "plotCoverage, w/ duplicates"
 plotCoverage \
-	--bamfiles $dupMarkBamfiles \
-	--labels $sampleFiles \
+	--bamfiles ${dupMarkBamfiles} \
+	--labels ${sampleFiles} \
 	--skipZeros \
 	--numberOfSamples 1000000 \
-	--numberOfProcessors $numberOfProcessors \
+	--numberOfProcessors ${numberOfProcessors} \
 	--plotFile coverage.dupMark.png \
 	--outRawCounts rawCounts.coverage.dupMark.txt
 echo ""
 
 echo "plotCoverage, w/o duplicates"
 plotCoverage \
-	--bamfiles $dupMarkBamfiles \
-	--labels $sampleFiles \
+	--bamfiles ${dupMarkBamfiles} \
+	--labels ${sampleFiles} \
 	--skipZeros \
 	--numberOfSamples 1000000 \
-	--numberOfProcessors $numberOfProcessors \
+	--numberOfProcessors ${numberOfProcessors} \
 	--plotFile coverage.dedup.png \
 	--outRawCounts rawCounts.coverage.dedup.txt \
 	--ignoreDuplicates
