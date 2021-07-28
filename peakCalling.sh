@@ -103,46 +103,46 @@ elif [ "${peakCalling}" == "MACS2" ]; then
     outdir="peaks_macs2"
 
     echo "Samples for peak-calling are:"
-    echo $sampleFiles
-    echo "libraryType: $inputFormat"
-    echo "output files are saved into $outdir"
+    echo ${sampleFiles}
+    echo "libraryType: ${inputFormat}"
+    echo "output files are saved into ${outdir}"
 
-    if [ "$inputFormat" == "bam" ]; then
+    if [ "${inputFormat}" == "bam" ]; then
         format="BAMPE"
-    elif [ "$inputFormat" == "bed" ]; then
+    elif [ "${inputFormat}" == "bed" ]; then
         format="BEDPE"
-    elif [ "$inputFormat" == "auto" ]; then
+    elif [ "${inputFormat}" == "auto" ]; then
         format="AUTO"
     else
         echo "wrong input format"
     fi
 
-    mkdir $outdir
+    mkdir ${outdir}
 
     while read exp
     do
-        echo $exp
-        IFS=' ' read -r -a array <<< "$exp"
+        echo ${exp}
+        IFS=' ' read -r -a array <<< "${exp}"
 
         sample=${array[0]}
         control=${array[1]}
 
-        echo "treatment: $sample"
-        echo "control: $control"
+        echo "treatment: ${sample}"
+        echo "control: ${control}"
 
         if [ "$control" != "NA" ]; then
 
                 # calling peaks
-                echo "calling broad peaks: $sample with $control"
+                echo "calling broad peaks: ${sample} with ${control}"
                 macs2 callpeak \
-                        --format $format \
-                        --treatment $sample.dupMark.bam \
-                        --control $control.dupMark.bam \
-                        --name $sample.broad \
-                        --outdir $outdir \
+                        --format ${format} \
+                        --treatment ${sample}.dupMark.bam \
+                        --control ${control}.dupMark.bam \
+                        --name ${sample}.broad \
+                        --outdir ${outdir} \
                         --broad \
                         -g hs \
-                        -q $qvalue \
+                        -q ${qvalue} \
                         -B \
                         --SPMR \
                         --nomodel
