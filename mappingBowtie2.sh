@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p standard -o chipseq.mapping.bowtie2.log -t 16:00:00
+#SBATCH -p standard -o CnT.mapping.bowtie2.log -t 16:00:00
 #SBATCH -c 12 --mem=144G
 
 #################################################################################################################
@@ -35,7 +35,7 @@ module load perl
 #######################
 ## parameter setting ##
 #######################
-# library
+# library type
 libraryType="PE"
 # SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
 
@@ -45,21 +45,20 @@ reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 #PICARD="/software/picard/2.12.0/picard.jar"
 
-# programs
-bwBinSize=10
-mappingQuality=10
-maxin=700
+# environment parameters
 numberOfProcessors=12
-threads=12
 
-# fastp parameters
+# program parameters
+bwBinSize=10
 cutWindowSize=4
 lengthRequired=35
+mappingQuality=10
+maxFragmentLength=800
+maxin=700
 
 # import the sample list
 awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
 awk '{print $0=$0".dupMark.bam"}' < samples.txt > dupMarkBamfiles.txt
-awk '{print $0=$0".dedup.bam"}'   < samples.txt > dedupBamfiles.txt
 
 sampleFiles=$(<samples.txt)
 dupMarkBamfiles=$(<dupMarkBamfiles.txt)
@@ -74,28 +73,41 @@ echo "mapping quality cut-off: ${mappingQuality}"
 echo ""
 echo ""
 
-#########################
-## QC1 - raw sequences ##
-#########################
-
+# mkdir
+mkdir -p QC/bamqc
+mkdir -p QC/bowtie2_summary
 mkdir -p QC/fastqc
 mkdir -p QC/fastp
-mkdir -p QC/bamqc
+mkdir -p QC/fragmentSize
 mkdir -p QC/misc
+mkdir -p QC/multiBamSummary
+
+mkdir -p bamFiles
+mkdir -p bamFiles.ecoli
+mkdir -p bamFiles.phix
+
+mkdir -p bigWig/dupMark/rpkm
+mkdir -p bigWig/dupMark/none
+mkdir -p bigWig/dedup/rpkm
+mkdir -p bigWig/dedup/none
+
+########################
+## QC - raw sequences ##
+########################
 
 for FILE in *.gz
 do
 	echo "fastqc: ${FILE}"
 	fastqc "${FILE}" \
-		--threads $(echo ${numberOfProcessors}/3 | bc) \
+		--threads ${numberOfProcessors} \
 		--outdir QC/fastqc \
 		--quiet
 	echo ""
+	#--threads $(echo ${numberOfProcessors}/2 | bc) \
 done
 
 for sample in ${sampleFiles[*]}
 do
-	# running fastp
 	echo "QC and trimming ${sample} by fastp"
 	if [ "${libraryType}" == "SE" ]; then
 		fastp \
@@ -132,19 +144,12 @@ done
 #######################
 
 # to do: option: merge replicates: cat
-
-mkdir -p bamFiles
-mkdir -p bamFiles.ecoli
-mkdir -p bamFiles.phix
-#mkdir -p bamFiles.chrM
-mkdir -p QC/bowtie2_summary
-
 for sample in ${sampleFiles[*]}
 do
-	echo "mapping ${sample}"
+	echo "mapping ${sample} with bowtie2"
 
 	if [ "$libraryType" == "SE" ]; then
-		echo "mapping ${sample} to human genome"
+		echo "mapping single-end library of ${sample} to human genome"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference} \
@@ -153,10 +158,9 @@ do
 			--very-sensitive \
 			-U ${sample}.R1_trim.fastq.gz \
 			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
-			
 		echo ""
 
-		echo "mapping ${sample} to E. coli"
+		echo "mapping single-end library of ${sample} to E. coli"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_ecoli} \
@@ -167,7 +171,7 @@ do
 			-S ${sample}.ecoli.sam &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
-		echo "mapping ${sample} to phix"
+		echo "mapping single-end library of ${sample} to phiX"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_phix} \
@@ -179,7 +183,7 @@ do
 		echo ""
 
 	elif [ "${libraryType}" == "PE" ]; then
-		echo "mapping ${sample} to human genome"
+		echo "mapping paired-end library of ${sample} to human genome"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference} \
@@ -193,7 +197,7 @@ do
 			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
 
-		echo "mapping $sample to E. coli"
+		echo "mapping paired-end library of ${sample} to E. coli"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_ecoli} \
@@ -207,7 +211,7 @@ do
 			-S ${sample}.ecoli.sam  &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
-		echo "mapping $sample to phiX"
+		echo "mapping paired-end library of ${sample} to phiX"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_phix} \
@@ -224,29 +228,29 @@ do
 		echo "wrong library type"
 	fi
 
-	echo "filtering ${sample} with mapping quality < ${mappingQuality}, remove mitochrondria and unassembled contigs"
+	echo "filtering ${sample} with the mapping quality < ${mappingQuality}, remove unassembled contigs, mitochrondria, and chrY"
   
-  	# Need to add an option for filtering: unconventional chromosomes, chrY, and chrM
-	sed '/chrM/d;/chrY/d;/chrEBV/d;/random/d;/chrUn/d' < $sample.fastp_trim.sam > $sample.filtered.sam
+	sed '/random/d;/chrUn/d;/chrEBV/d;/chrM/d;/chrY/d' < $sample.fastp_trim.sam > $sample.filtered.sam
+#	samtools view -bSq ${mappingQuality} ${sample}.fastp_trim.sam chrM > ${sample}.chrM.bam
   	samtools view -bSq ${mappingQuality} ${sample}.filtered.sam        > ${sample}.filtered.bam
 	samtools view -bSq ${mappingQuality} ${sample}.ecoli.sam           > ${sample}.ecoli10.bam
 	samtools view -bSq ${mappingQuality} ${sample}.phix.sam            > ${sample}.phix10.bam
-#	samtools view -bSq ${mappingQuality} ${sample}.fastp_trim.sam chrM > ${sample}.chrM.bam
 	echo ""
 
 	echo "samtools flagstat ${sample}.filtered.bam"
 	samtools flagstat ${sample}.filtered.bam
 	echo ""
 
+	rm -f ${sample}.*_trim.fastq.gz
 	rm -f ${sample}.*.sam
 	mv ${sample}.ecoli10.bam bamFiles.ecoli
 	mv ${sample}.phix10.bam  bamFiles.phix
 #	mv ${sample}.chrM.bam    bamFiles.chrM
 done
 
-##########################
-## bam files processing ##
-##########################
+###################################################################
+## bam files processing: sorting and mark duplicates with picard ##
+###################################################################
 
 for sample in ${sampleFiles[*]}
 do
@@ -280,15 +284,10 @@ do
 	echo ""
 done
 
-###################################################
-## Quality controls of aligned reads (BAM files) ##
-###################################################
-
 ######################################################################################
+## Quality controls of aligned reads (BAM files)                                    ##
 ## multiBamSummary: similarity of read distribution in different sequencing samples ##
 ######################################################################################
-
-mkdir -p QC/multiBamSummary
 
 echo "multiBamSummary"
 multiBamSummary bins \
@@ -301,15 +300,15 @@ echo ""
 
 # it might be better to plot PCA in R 
 # --transpose can be used after version 3
-
 #echo "plot PCA"
 #plotPCA \
 #	--corData multiBamSummary.results.npz \
+#       --labels ${sampleFiles} \
 #	--transpose \
 #	-o PCA_readCounts.png
 #echo ""
 
-echo "plot heatmap for Spearman Correlation"
+echo "plot heatmap for pairwise Spearman correlation coefficiencies"
 plotCorrelation \
 	-in multiBamSummary.results.npz \
 	--corMethod spearman \
@@ -326,7 +325,6 @@ mv multiBamSummary.dupMark.results.npz         QC/multiBamSummary/
 mv SpearmanCorr_readCounts.dupMark.tab         QC/multiBamSummary/
 mv heatmap_SpearmanCorr_readCounts.dupMark.png QC/multiBamSummary/
 
-==check
 ##############################################
 ## plotCoverage: coverage of the sequencing ##
 ##############################################
@@ -353,32 +351,8 @@ plotCoverage \
 	--ignoreDuplicates
 echo ""
 
-##########################################################################
-## FragmentSize :the fragment size distribution of your paired-end data ##
-##########################################################################
-
-if [ "$libraryType" == "PE" ]; then
-	bamPEFragmentSize \
-		-hist fragmentSize.png \
-		--plotTitle "Fragment Size" \
-		--numberOfProcessors $numberOfProcessors \
-		--maxFragmentLength 800 \
-		--bamfiles $dupMarkBamfiles \
-		--samplesLabel $sampleFiles
-
-	for sample in ${sampleFiles[*]}
-	do
-		bamPEFragmentSize \
-			-hist fragmentSize.$sample.png \
-			--plotTitle "Fragment Size" \
-			--numberOfProcessors $numberOfProcessors \
-			--maxFragmentLength 800 \
-			--bamfiles $sample.dupMark.bam \
-			--samplesLabel $sample
-	echo ""
-	done
-fi
-
+mv coverage.*.png  QC/misc/
+mv rawCounts.*.txt QC/misc/
 
 # How well did your ChIP experiment work?
 #	- deepTools: plotFingerprint
@@ -386,18 +360,40 @@ fi
 #	to remove a GC-bias from aligned reads (BAM file)
 #	- deepTools: correctGCbias
 
+##########################################################################
+## FragmentSize :the fragment size distribution of paired-end data      ##
+##########################################################################
+
+if [ "${libraryType}" == "PE" ]; then
+	for sample in ${sampleFiles[*]}
+	do
+		bamPEFragmentSize \
+			-hist fragmentSize.${sample}.png \
+			--plotTitle "Fragment Size" \
+			--numberOfProcessors ${numberOfProcessors} \
+			--maxFragmentLength ${maxFragmentLength} \
+			--bamfiles ${sample}.dupMark.bam \
+			--samplesLabel ${sample}
+		echo ""
+	done
+	mv fragmentSize.*.png QC/fragmentSize
+fi
+
 # plotFingerprint
 plotFingerprint \
-	--bamfiles $dupMarkBamfiles \
-	--labels $sampleFiles \
-	--minMappingQuality $mappingQuality \
+	--bamfiles ${dupMarkBamfiles} \
+	--labels ${sampleFiles} \
+	--minMappingQuality ${mappingQuality} \
 	--skipZeros \
 	--numberOfSamples 50000 \
-	--numberOfProcessors $numberOfProcessors \
+	--numberOfProcessors ${numberOfProcessors} \
 	--plotTitle "Fingerprints of samples" \
 	--plotFile fingerprints.png \
 	--outRawCounts fingerprints.tab \
 	--outQualityMetrics qualityMetrics.tab
+
+mv fingerprints.*     QC/misc/
+mv qualityMetrics.tab QC/misc/
 
 # Should you be worried about a GC bias of your sample?
 # - deepTools: computeGCbias, correctGCbias
@@ -406,111 +402,63 @@ plotFingerprint \
 ###############################################################################################################
 ## coverage: to generate a sequencing-depth-normalized continuous profile of read coverages (BAM --> bigWig) ##
 ###############################################################################################################
-echo "binSize: $bwBinSize and ignore chrX, chrY, and chrM for normalization"
+
+echo "making bigWig files"
+echo "binSize: ${bwBinSize} and ignore chrX, chrY, and chrM for normalization"
 echo ""
-
-if [ "$libraryType" == "SE" ]; then
-	for sample in ${sampleFiles[*]}
-	do
-		echo "split $sample dupMark.bam file (SE) according to the strand"
-		# forward strand
-		bamCoverage -b $sample.dupMark.bam -o $sample.dupMark.fwd.bw --samFlagExclude 16
-		# reverse strand
-		bamCoverage -b $sample.dupMark.bam -o $sample.dupMark.rev.bw --samFlagInclude 16
-
-		# index the filtered BAM file
-		samtools index $sample.dupMark.fwd.bam
-		samtools index $sample.dupMark.rev.bam
-		
-		echo ""
-	done
-elif [ "$libraryType" == "PE" ]; then
-	for sample in ${sampleFiles[*]}
-	do
-		echo "split $sample dupMark.bam file (PE) according to the strand"
-		# forward strand
-		# include reads that are 2nd in a pair (128);
-		# exclude reads that are mapped to the reverse strand (16)
-		samtools view -b -f 128 -F 16 $sample.dupMark.bam > a.fwd1.bam
-
-		# exclude reads that are mapped to the reverse strand (16) and
-		# first in a pair (64): 64 + 16 = 80
-		samtools view -b -f 80 $sample.dupMark.bam > a.fwd2.bam
-
-		# reverse strand
-		# include reads that map to the reverse strand (128)
-		# and are second in a pair (16): 128 + 16 = 144
-		samtools view -b -f 144 $sample.dupMark.bam > a.rev1.bam
-
-		# include reads that are first in a pair (64), but
-		# exclude those ones that map to the reverse strand (16)
-		samtools view -b -f 64 -F 16 $sample.dupMark.bam > a.rev2.bam
-
-		# merge the temporary files
-		samtools merge -f $sample.dupMark.fwd.bam a.fwd1.bam a.fwd2.bam
-		samtools merge -f $sample.dupMark.rev.bam a.rev1.bam a.rev2.bam
-
-		# index the filtered BAM file
-		samtools index $sample.dupMark.fwd.bam
-		samtools index $sample.dupMark.rev.bam
-
-		# remove temporary files
-		rm -f a.fwd*.bam
-		rm -f a.rev*.bam
-		
-		echo ""
-	done
-else
-	echo "wrong library type"
-fi
-
 
 for sample in ${sampleFiles[*]}
 do
-	echo "generating normalized (RPKM) bigwig file of $sample w/ duplicate"
+	echo "generating normalized (RPKM) bigwig files of ${sample} w/ duplicates"
 	bamCoverage \
-		--bam $sample.dupMark.bam \
-		--outFileName $sample.dupMark.rpkm.bw \
-		--binSize $bwBinSize \
+		--bam ${sample}.dupMark.bam \
+		--outFileName ${sample}.dupMark.rpkm.bw \
+		--binSize ${bwBinSize} \
 		--extendReads \
-		--numberOfProcessors $numberOfProcessors \
+		--numberOfProcessors ${numberOfProcessors} \
 		--normalizeUsingRPKM \
 		--ignoreForNormalization chrM chrX chrY
 	echo ""
 
-	echo "generating unnormalized bigwig file of $sample w/ duplicate"
+	echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
 	bamCoverage \
-		--bam $sample.dupMark.bam \
-		--outFileName $sample.dupMark.bw \
-		--binSize $bwBinSize \
+		--bam ${sample}.dupMark.bam \
+		--outFileName ${sample}.dupMark.bw \
+		--binSize ${bwBinSize} \
 		--extendReads \
-		--numberOfProcessors $numberOfProcessors \
-    --ignoreForNormalization chrM chrX chrY
+		--numberOfProcessors ${numberOfProcessors} \
+    		--ignoreForNormalization chrM chrX chrY
 	echo ""
 
-	echo "generating normalized (RPKM) bigwig file of $sample w/o duplicate"
+	echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 	bamCoverage \
-		--bam $sample.dupMark.bam \
-		--outFileName $sample.dedupMark.rpkm.bw \
-		--binSize $bwBinSize \
+		--bam ${sample}.dupMark.bam \
+		--outFileName ${sample}.dedupMark.rpkm.bw \
+		--binSize ${bwBinSize} \
 		--ignoreDuplicates \
 		--extendReads \
-		--numberOfProcessors $numberOfProcessors \
+		--numberOfProcessors ${numberOfProcessors} \
 		--normalizeUsingRPKM \
 		--ignoreForNormalization chrM chrX chrY
 	echo ""
 
-	echo "generating unnormalized bigwig file of $sample w/o duplicate"
+	echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
 	bamCoverage \
-		--bam $sample.dupMark.bam \
-		--outFileName $sample.dedupMark.rpkm.bw \
-		--binSize $bwBinSize \
+		--bam ${sample}.dupMark.bam \
+		--outFileName ${sample}.dedupMark.rpkm.bw \
+		--binSize ${bwBinSize} \
 		--ignoreDuplicates \
 		--extendReads \
-		--numberOfProcessors $numberOfProcessors \
-    --ignoreForNormalization chrM chrX chrY
+		--numberOfProcessors ${numberOfProcessors} \
+    		--ignoreForNormalization chrM chrX chrY
 	echo ""
 
+	mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
+        mv ${sample}.dupMark.bw      bigWig/dupMark/none
+        mv ${sample}.dedup.rpkm.bw   bigWig/dedup/rpkm
+        mv ${sample}.dedup.bw        bigWig/dedup/none
 done
+mv *files.txt QC/misc/
+mv *.bam*     bamFiles/
 
-# other commands need to be added.
+echo "end of mapping"
