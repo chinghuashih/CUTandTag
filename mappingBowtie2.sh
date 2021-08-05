@@ -47,6 +47,7 @@ reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 
 # environment parameters
 numberOfProcessors=12
+BAMQC="~/tools/BamQC/bin/bamqc"
 
 # program parameters
 bwBinSize=10
@@ -276,7 +277,8 @@ do
 	echo ""
 
 	echo "check bam files of ${sample} by bamqc"
-	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
+#	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
+	${BAMQC} ${sample}.dupMark.bam
 	echo ""
 	
 	mv *.metrics QC/misc/
