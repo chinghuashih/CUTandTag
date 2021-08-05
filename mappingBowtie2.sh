@@ -176,10 +176,10 @@ do
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference_phix} \
-			-U ${sample}.trim.fastq.gz \
 			--no-unal \
 			--local \
 			--very-sensitive-local \
+			-U ${sample}.trim.fastq.gz \
 			-S ${sample}.phix.sam  &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 
@@ -193,8 +193,9 @@ do
 			--very-sensitive-local \
 			--no-mixed \
 			--no-discordant \
-			--maxins ${maxin} \			
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			--maxins ${maxin} \
+			-1 ${sample}.R1_trim.fastq.gz \
+			-2 ${sample}.R2_trim.fastq.gz \
 			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
 
@@ -208,7 +209,8 @@ do
 			--no-mixed \
 			--no-discordant \
 			--maxins ${maxin} \
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-1 ${sample}.R1_trim.fastq.gz \
+			-2 ${sample}.R2_trim.fastq.gz \
 			-S ${sample}.ecoli.sam  &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
@@ -222,7 +224,8 @@ do
 			--no-mixed \
 			--no-discordant \
 			--maxins ${maxin} \
-			-1 ${sample}.R1_trim.fastq.gz -2 ${sample}.R2_trim.fastq.gz \
+			-1 ${sample}.R1_trim.fastq.gz \
+			-2 ${sample}.R2_trim.fastq.gz \
 			-S ${sample}.phix.sam &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 	else
@@ -280,7 +283,7 @@ do
 #	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
 	${BAMQC} ${sample}.dupMark.bam
 	echo ""
-	
+
 	mv *.metrics QC/misc/
 	mv *_bamqc   QC/bamqc/
 	echo ""
