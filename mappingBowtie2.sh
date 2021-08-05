@@ -3,15 +3,25 @@
 #SBATCH -c 12 --mem=144G
 
 #################################################################################################################
-# required files:
+# input files:
 #                 1. fastq/fastq.gz
-#                 2. the reference genome
-#                 3. annotation files: gtf and bed formats
-#                 4. samples.txt: contains samples' names, one per each line
-# Notice:
-#                 1. fastp is needed to be installed.
+#                 2. the index reference genomes, including hg38, E. coli, and phiX
+#                 3. samples.txt: contains samples' names, one per each line
+#
+# required programs:
+#                 1. fastqc
+#                 2. fastp
+#                 3. bowtie2
+#                 4. samtools
+#                 5. picard
+#                 6. deeptools
+#
+# note:
+#                 1. fastp and bamqc are needed to be installed.
 #                 2. check the names of fastq/fastq.gz files; the file names in this scripts is the output 
 #                    from URMC genome sequencing core.
+#                 3. deeptools commands in this pipeline are based on v2.5.3. Normalized bigWig commands need
+#                    to be modified if you use higher version.
 #################################################################################################################
 
 #########################################
@@ -39,15 +49,8 @@ module load perl
 libraryType="PE"
 # SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
 
-# references
-reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
-reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
-reference_phix="/home/cshih8/references/phix_bowtie2/phix"
-#PICARD="/software/picard/2.12.0/picard.jar"
-
 # environment parameters
 numberOfProcessors=12
-BAMQC="~/tools/BamQC/bin/bamqc"
 
 # program parameters
 bwBinSize=10
@@ -56,6 +59,11 @@ lengthRequired=35
 mappingQuality=10
 maxFragmentLength=800
 maxin=700
+
+# references
+reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
+reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
+reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 
 # import the sample list
 awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
@@ -144,7 +152,6 @@ done
 ## mapping - bowtie2 ##
 #######################
 
-# to do: option: merge replicates: cat
 for sample in ${sampleFiles[*]}
 do
 	echo "mapping ${sample} with bowtie2"
@@ -259,7 +266,6 @@ done
 for sample in ${sampleFiles[*]}
 do
 	echo "sorting ${sample} by picard"
-#	java -Xmx10g -Xmx16G -jar ${PICARD} SortSam \
 	java -jar ${PICARD} SortSam \
 		I=${sample}.filtered.bam \
 		O=${sample}.sorted.bam \
@@ -269,7 +275,6 @@ do
 	echo ""
 
 	echo "marking duplicates in ${sample} and indexing"
-#	java -Xmx10g -Xmx16G -jar ${PICARD} MarkDuplicates \
 	java -jar ${PICARD} MarkDuplicates \
 		I=${sample}.sorted.bam \
 		O=${sample}.dupMark.bam \
@@ -280,8 +285,7 @@ do
 	echo ""
 
 	echo "check bam files of ${sample} by bamqc"
-#	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
-	${BAMQC} ${sample}.dupMark.bam
+	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
 	echo ""
 
 	mv *.metrics QC/misc/
@@ -326,9 +330,9 @@ plotCorrelation \
 	--outFileCorMatrix SpearmanCorr_readCounts.tab
 echo ""
 
-mv multiBamSummary.dupMark.results.npz         QC/multiBamSummary/
-mv SpearmanCorr_readCounts.dupMark.tab         QC/multiBamSummary/
-mv heatmap_SpearmanCorr_readCounts.dupMark.png QC/multiBamSummary/
+mv multiBamSummary.results.npz         QC/multiBamSummary/
+mv SpearmanCorr_readCounts.tab         QC/multiBamSummary/
+mv heatmap_SpearmanCorr_readCounts.png QC/multiBamSummary/
 
 ##############################################
 ## plotCoverage: coverage of the sequencing ##
@@ -431,14 +435,13 @@ do
 		--outFileName ${sample}.dupMark.bw \
 		--binSize ${bwBinSize} \
 		--extendReads \
-		--numberOfProcessors ${numberOfProcessors} \
-    		--ignoreForNormalization chrM chrX chrY
+		--numberOfProcessors ${numberOfProcessors}
 	echo ""
 
 	echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 	bamCoverage \
 		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dedupMark.rpkm.bw \
+		--outFileName ${sample}.dedup.rpkm.bw \
 		--binSize ${bwBinSize} \
 		--ignoreDuplicates \
 		--extendReads \
@@ -450,12 +453,11 @@ do
 	echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
 	bamCoverage \
 		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dedupMark.rpkm.bw \
+		--outFileName ${sample}.dedup.bw \
 		--binSize ${bwBinSize} \
 		--ignoreDuplicates \
 		--extendReads \
-		--numberOfProcessors ${numberOfProcessors} \
-    		--ignoreForNormalization chrM chrX chrY
+		--numberOfProcessors ${numberOfProcessors}
 	echo ""
 
 	mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
@@ -463,7 +465,12 @@ do
         mv ${sample}.dedup.rpkm.bw   bigWig/dedup/rpkm
         mv ${sample}.dedup.bw        bigWig/dedup/none
 done
+mkdir -p raw
+mv *gz        raw
 mv *files.txt QC/misc/
+mv samples.tx QC/misc/
 mv *.bam*     bamFiles/
+
+rm -rf tmp
 
 echo "end of mapping"
