@@ -241,7 +241,7 @@ do
 
 	echo "filtering ${sample} with the mapping quality < ${mappingQuality}, remove unassembled contigs, mitochrondria, and chrY"
   
-	sed '/random/d;/chrUn/d;/chrEBV/d;/chrM/d;/chrY/d' < $sample.fastp_trim.sam > $sample.filtered.sam
+	sed '/random/d;/chrUn/d;/chrEBV/d;/chrM/d;/chrY/d' < ${sample}.fastp_trim.sam > ${sample}.filtered.sam
 #	samtools view -bSq ${mappingQuality} ${sample}.fastp_trim.sam chrM > ${sample}.chrM.bam
   	samtools view -bSq ${mappingQuality} ${sample}.filtered.sam        > ${sample}.filtered.bam
 	samtools view -bSq ${mappingQuality} ${sample}.ecoli.sam           > ${sample}.ecoli10.bam
