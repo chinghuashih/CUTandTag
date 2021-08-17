@@ -48,6 +48,8 @@ module load perl
 # library type
 libraryType="PE"
 # SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
+extendReads=200
+# for SE libraries to make bigWig files. No more than 4X read length.
 
 # environment parameters
 numberOfProcessors=12
@@ -128,7 +130,7 @@ do
 			--cut_tail \
 			--length_required ${lengthRequired}
 
-	elif [ "$libraryType" == "PE" ]; then
+	elif [ "${libraryType}" == "PE" ]; then
 		~/tools/fastp/fastp \
 			--in1 ${sample}.R1.fastq.gz \
 			--in2 ${sample}.R2.fastq.gz \
@@ -156,14 +158,14 @@ for sample in ${sampleFiles[*]}
 do
 	echo "mapping ${sample} with bowtie2"
 
-	if [ "$libraryType" == "SE" ]; then
+	if [ "${libraryType}" == "SE" ]; then
 		echo "mapping single-end library of ${sample} to human genome"
 		bowtie2 -t \
 			-p ${numberOfProcessors} \
 			-x ${reference} \
 			--no-unal \
 			--local \
-			--very-sensitive \
+			--very-sensitive-local \
 			-U ${sample}.R1_trim.fastq.gz \
 			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
@@ -175,7 +177,7 @@ do
 			--no-unal \
 			--local \
 			--very-sensitive-local \
-			-U ${sample}.trim.fastq.gz \
+			-U ${sample}.R1_trim.fastq.gz \
 			-S ${sample}.ecoli.sam &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
@@ -186,7 +188,7 @@ do
 			--no-unal \
 			--local \
 			--very-sensitive-local \
-			-U ${sample}.trim.fastq.gz \
+			-U ${sample}.R1_trim.fastq.gz \
 			-S ${sample}.phix.sam  &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 
@@ -289,7 +291,7 @@ do
 	echo ""
 
 	mv *.metrics QC/misc/
-	mv *_bamqc   QC/bamqc/
+	mv *_bamqc*  QC/bamqc/
 	echo ""
 done
 
@@ -416,55 +418,112 @@ echo "making bigWig files"
 echo "binSize: ${bwBinSize} and ignore chrX, chrY, and chrM for normalization"
 echo ""
 
-for sample in ${sampleFiles[*]}
-do
-	echo "generating normalized (RPKM) bigwig files of ${sample} w/ duplicates"
-	bamCoverage \
-		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dupMark.rpkm.bw \
-		--binSize ${bwBinSize} \
-		--extendReads \
-		--numberOfProcessors ${numberOfProcessors} \
-		--normalizeUsingRPKM \
-		--ignoreForNormalization chrM chrX chrY
-	echo ""
 
-	echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
-	bamCoverage \
-		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dupMark.bw \
-		--binSize ${bwBinSize} \
-		--extendReads \
-		--numberOfProcessors ${numberOfProcessors}
-	echo ""
+if [ "${libraryType}" == "SE" ]; then
+	for sample in ${sampleFiles[*]}
+	do
+		echo "generating normalized (RPKM) bigwig files of ${sample} w/ duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dupMark.rpkm.bw \
+			--binSize ${bwBinSize} \
+			--extendReads ${extendReads} \
+			--numberOfProcessors ${numberOfProcessors} \
+			--normalizeUsingRPKM \
+			--ignoreForNormalization chrM chrX chrY
+		echo ""
 
-	echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
-	bamCoverage \
-		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dedup.rpkm.bw \
-		--binSize ${bwBinSize} \
-		--ignoreDuplicates \
-		--extendReads \
-		--numberOfProcessors ${numberOfProcessors} \
-		--normalizeUsingRPKM \
-		--ignoreForNormalization chrM chrX chrY
-	echo ""
+		echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dupMark.bw \
+			--binSize ${bwBinSize} \
+			--extendReads ${extendReads} \
+			--numberOfProcessors ${numberOfProcessors}
+		echo ""
 
-	echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
-	bamCoverage \
-		--bam ${sample}.dupMark.bam \
-		--outFileName ${sample}.dedup.bw \
-		--binSize ${bwBinSize} \
-		--ignoreDuplicates \
-		--extendReads \
-		--numberOfProcessors ${numberOfProcessors}
-	echo ""
+		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dedup.rpkm.bw \
+			--binSize ${bwBinSize} \
+			--ignoreDuplicates \
+			--extendReads ${extendReads} \
+			--numberOfProcessors ${numberOfProcessors} \
+			--normalizeUsingRPKM \
+			--ignoreForNormalization chrM chrX chrY
+		echo ""
 
-	mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
-        mv ${sample}.dupMark.bw      bigWig/dupMark/none
-        mv ${sample}.dedup.rpkm.bw   bigWig/dedup/rpkm
-        mv ${sample}.dedup.bw        bigWig/dedup/none
-done
+		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dedup.bw \
+			--binSize ${bwBinSize} \
+			--ignoreDuplicates \
+			--extendReads ${extendReads} \
+			--numberOfProcessors ${numberOfProcessors}
+		echo ""
+
+		mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
+		mv ${sample}.dupMark.bw      bigWig/dupMark/none
+		mv ${sample}.dedup.rpkm.bw   bigWig/dedup/rpkm
+		mv ${sample}.dedup.bw        bigWig/dedup/none
+	done
+
+elif [ "${libraryType}" == "PE" ]; then
+	for sample in ${sampleFiles[*]}
+	do
+		echo "generating normalized (RPKM) bigwig files of ${sample} w/ duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dupMark.rpkm.bw \
+			--binSize ${bwBinSize} \
+			--extendReads \
+			--numberOfProcessors ${numberOfProcessors} \
+			--normalizeUsingRPKM \
+			--ignoreForNormalization chrM chrX chrY
+		echo ""
+
+		echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dupMark.bw \
+			--binSize ${bwBinSize} \
+			--extendReads \
+			--numberOfProcessors ${numberOfProcessors}
+		echo ""
+
+		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dedup.rpkm.bw \
+			--binSize ${bwBinSize} \
+			--ignoreDuplicates \
+			--extendReads \
+			--numberOfProcessors ${numberOfProcessors} \
+			--normalizeUsingRPKM \
+			--ignoreForNormalization chrM chrX chrY
+		echo ""
+
+		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
+		bamCoverage \
+			--bam ${sample}.dupMark.bam \
+			--outFileName ${sample}.dedup.bw \
+			--binSize ${bwBinSize} \
+			--ignoreDuplicates \
+			--extendReads \
+			--numberOfProcessors ${numberOfProcessors}
+		echo ""
+
+		mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
+		mv ${sample}.dupMark.bw      bigWig/dupMark/none
+		mv ${sample}.dedup.rpkm.bw   bigWig/dedup/rpkm
+		mv ${sample}.dedup.bw        bigWig/dedup/none
+	done
+else
+	echo "wrong library type"
+fi
+
 mkdir -p raw
 mv *gz        raw
 mv *files.txt QC/misc/
