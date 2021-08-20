@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p standard -o CnT.mapping.bowtie2.log -t 16:00:00
-#SBATCH -c 12 --mem=144G
+#SBATCH -c 16 --mem=128G
 
 #################################################################################################################
 # input files:
@@ -17,7 +17,7 @@
 #                 6. deeptools
 #
 # note:
-#                 1. fastp and bamqc are needed to be installed.
+#                 1. bamqc is needed to be installed.
 #                 2. check the names of fastq/fastq.gz files; the file names in this scripts is the output 
 #                    from URMC genome sequencing core.
 #                 3. deeptools commands in this pipeline are based on v2.5.3. Normalized bigWig commands need
@@ -36,7 +36,8 @@ module load picard
 # QC and visualization
 module load fastp
 module load fastqc
-module load deeptools
+module load multiqc
+module load deeptools/2.5.3
 
 # misc
 module load java
@@ -52,7 +53,7 @@ extendReads=200
 # for SE libraries to make bigWig files. No more than 4X read length.
 
 # environment parameters
-numberOfProcessors=12
+numberOfProcessors=16
 
 # program parameters
 bwBinSize=10
@@ -62,7 +63,7 @@ mappingQuality=10
 maxFragmentLength=800
 maxin=700
 
-# references
+# indexed references
 reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
 reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
@@ -117,6 +118,8 @@ do
 	#--threads $(echo ${numberOfProcessors}/2 | bc) \
 done
 
+# need to add multiqc
+
 for sample in ${sampleFiles[*]}
 do
 	echo "QC and trimming ${sample} by fastp"
@@ -131,7 +134,7 @@ do
 			--length_required ${lengthRequired}
 
 	elif [ "${libraryType}" == "PE" ]; then
-		~/tools/fastp/fastp \
+		fastp \
 			--in1 ${sample}.R1.fastq.gz \
 			--in2 ${sample}.R2.fastq.gz \
 			--out1 ${sample}.R1_trim.fastq.gz \
