@@ -421,7 +421,6 @@ echo "making bigWig files"
 echo "binSize: ${bwBinSize} and ignore chrX, chrY, and chrM for normalization"
 echo ""
 
-
 if [ "${libraryType}" == "SE" ]; then
 	for sample in ${sampleFiles[*]}
 	do
