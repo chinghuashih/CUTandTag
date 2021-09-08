@@ -131,7 +131,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired}
+			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
 
 	elif [ "${libraryType}" == "PE" ]; then
 		fastp \
@@ -143,7 +143,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired}
+			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
 	else
 		echo "wrong library type"
 	fi
@@ -533,5 +533,41 @@ mv samples.tx QC/misc/
 mv *.bam*     bamFiles/
 
 rm -rf tmp
+
+############################################
+# writing the summary for mapping pipeline #
+############################################
+
+mkdir -p summary
+touch summary/summaryTable.txt
+echo -e \
+	library'\t'\
+	rawReads'\t'\
+	passedFiltersReads'\t'\
+	alignConcordant'\t'\
+	alignMulti'\t'\
+	Unalign'\t'\
+	alignOverallMap%'\t'\
+	alignConcordant%'\t'\
+	alignMulti%'\t'\
+	alignUnal%'\t'\
+	uniqueMapped'\t' >> info/infoTable.tsv
+	
+for sample in ${sampleFiles[*]}
+do
+	rawReads=$(cat        QC/fastp/${sample}.fastp.log             | grep "total reads:"                         | head -n 1 | awk '{print $3}')
+	passedReads=$(cat     QC/bowtie2_summary/${sample}.bowtie2.txt | grep "reads; of these:$"                                | awk '{print $1}')
+	alignConcordant=$(cat QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly exactly 1 time$"             | awk '{print $1}')
+	alignMulti=$(cat      QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly >1 times$"                   | awk '{print $1}')
+	unAlign=$(cat         QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly 0 times$"                    | awk '{print $1}')
+	B_OAP=$(cat           logs/align/${SAMPLE}_align.log           | grep "overall alignment rate$"                          | awk '{print $1}')
+	B_CONC_PER=$(echo ${B_CONC}"/"${PASSED_FILTERS}"*100"   | bc -l)%
+	B_MULTI_PER=$(echo ${B_MULTI}"/"${PASSED_FILTERS}"*100" | bc -l)%
+	B_UNAL_PER=$(echo ${B_UNAL}"/"${PASSED_FILTERS}"*100"   | bc -l)%
+
+	echo -e \
+		${sample}'\t'\
+		>> info/infoTable.tsv
+done
 
 echo "end of mapping"
