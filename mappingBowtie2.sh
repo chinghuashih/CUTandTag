@@ -103,6 +103,8 @@ mkdir -p bigWig/dupMark/none
 mkdir -p bigWig/dedup/rpkm
 mkdir -p bigWig/dedup/none
 
+mkdir -p raw
+
 ########################
 ## QC - raw sequences ##
 ########################
@@ -118,7 +120,8 @@ do
 	#--threads $(echo ${numberOfProcessors}/2 | bc) \
 done
 
-# need to add multiqc
+# multiqc to summarize fastqc results
+multiqc -d QC/fastqc -o QC -n multiqc_report -q --no-data-dir
 
 for sample in ${sampleFiles[*]}
 do
@@ -131,7 +134,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
+			--length_required ${lengthRequired} &> QC/fastp/${sample}.fastp.log
 
 	elif [ "${libraryType}" == "PE" ]; then
 		fastp \
@@ -143,7 +146,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
+			--length_required ${lengthRequired} &> QC/fastp/${sample}.fastp.log
 	else
 		echo "wrong library type"
 	fi
@@ -253,10 +256,6 @@ do
 	samtools view -bSq ${mappingQuality} ${sample}.phix.sam            > ${sample}.phix10.bam
 	echo ""
 
-	echo "samtools flagstat ${sample}.filtered.bam"
-	samtools flagstat ${sample}.filtered.bam
-	echo ""
-
 	rm -f ${sample}.*_trim.fastq.gz
 	rm -f ${sample}.*.sam
 	mv ${sample}.ecoli10.bam bamFiles.ecoli
@@ -286,13 +285,25 @@ do
 		TMP_DIR=tmp \
 		METRICS_FILE=${sample}.dupMark.metrics
 	samtools index ${sample}.dupMark.bam
-	rm -f ${sample}.sorted.bam
+
+	echo "remove duplicates in ${sample} and indexing"
+	java -jar ${PICARD} MarkDuplicates \
+		I=${sample}.sorted.bam \
+		O=${sample}.dedup.bam \
+		TMP_DIR=tmp \
+		REMOVE_DUPLICATES=true \
+		METRICS_FILE=${sample}.dedup.metrics
+	samtools index ${sample}.dedup.bam
+
+	echo "samtools flagstat ${sample}.dupMark.bam"
+	samtools flagstat ${sample}.dupMark.bam
 	echo ""
 
 	echo "check bam files of ${sample} by bamqc"
 	~/tools/BamQC/bin/bamqc ${sample}.dupMark.bam
 	echo ""
 
+	rm -f ${sample}.sorted.bam
 	mv *.metrics QC/misc/
 	mv *_bamqc*  QC/bamqc/
 	echo ""
@@ -368,15 +379,9 @@ echo ""
 mv coverage.*.png  QC/misc/
 mv rawCounts.*.txt QC/misc/
 
-# How well did your ChIP experiment work?
-#	- deepTools: plotFingerprint
-#	Processing/normalizing of alignment files
-#	to remove a GC-bias from aligned reads (BAM file)
-#	- deepTools: correctGCbias
-
-##########################################################################
-## FragmentSize :the fragment size distribution of paired-end data      ##
-##########################################################################
+#####################################################################
+## FragmentSize :the fragment size distribution of paired-end data ##
+#####################################################################
 
 if [ "${libraryType}" == "PE" ]; then
 	for sample in ${sampleFiles[*]}
@@ -408,10 +413,6 @@ plotFingerprint \
 
 mv fingerprints.*     QC/misc/
 mv qualityMetrics.tab QC/misc/
-
-# Should you be worried about a GC bias of your sample?
-# - deepTools: computeGCbias, correctGCbias
-# - if the data is normalized for GC bias, --ignoreDuplicates should absolutely not be used.
 
 ###############################################################################################################
 ## coverage: to generate a sequencing-depth-normalized continuous profile of read coverages (BAM --> bigWig) ##
@@ -526,11 +527,11 @@ else
 	echo "wrong library type"
 fi
 
-mkdir -p raw
-mv *gz        raw
-mv *files.txt QC/misc/
-mv samples.tx QC/misc/
-mv *.bam*     bamFiles/
+mv *gz           raw
+mv *files.txt    QC/misc/
+mv samples.txt   QC/misc/
+mv *dupMark.bam* bamFiles/
+mv *dedup.bam*   bamFiles.dedup/
 
 rm -rf tmp
 
@@ -540,6 +541,7 @@ rm -rf tmp
 
 mkdir -p summary
 touch summary/summaryTable.txt
+
 echo -e \
 	library'\t'\
 	rawReads'\t'\
@@ -560,14 +562,25 @@ do
 	alignConcordant=$(cat QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly exactly 1 time$"             | awk '{print $1}')
 	alignMulti=$(cat      QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly >1 times$"                   | awk '{print $1}')
 	unAlign=$(cat         QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly 0 times$"                    | awk '{print $1}')
-	B_OAP=$(cat           logs/align/${SAMPLE}_align.log           | grep "overall alignment rate$"                          | awk '{print $1}')
+	B_OAP=$(cat           QC/bowtie2_summary/${sample}.bowtie2.txt | grep "overall alignment rate$"                          | awk '{print $1}')
+	
+	
+	
 	B_CONC_PER=$(echo ${B_CONC}"/"${PASSED_FILTERS}"*100"   | bc -l)%
 	B_MULTI_PER=$(echo ${B_MULTI}"/"${PASSED_FILTERS}"*100" | bc -l)%
 	B_UNAL_PER=$(echo ${B_UNAL}"/"${PASSED_FILTERS}"*100"   | bc -l)%
 
 	echo -e \
 		${sample}'\t'\
-		>> info/infoTable.tsv
+		${rawReads}'\t'\
+		${passedReads}'\t'\
+		${alignConcordant}'\t'\
+		${alignMulti}'\t'\
+		${unAlign}'\t'\
+		${B_OAP}'\t'\
+		${B_CONC_PER}'\t'\
+		${B_MULTI_PER}'\t'\
+		${B_UNAL_PER}'\t' >> info/infoTable.tsv
 done
 
 echo "end of mapping"
