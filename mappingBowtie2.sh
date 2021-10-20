@@ -216,7 +216,7 @@ do
 			--maxins ${maxin} \
 			-1 ${sample}.R1_trim.fastq.gz \
 			-2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
+			-S ${sample}.fastp_trim.sam 2> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
 
 		echo "mapping paired-end library of ${sample} to E. coli"
@@ -231,7 +231,7 @@ do
 			--maxins ${maxin} \
 			-1 ${sample}.R1_trim.fastq.gz \
 			-2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.ecoli.sam  &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
+			-S ${sample}.ecoli.sam  2> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
 		echo "mapping paired-end library of ${sample} to phiX"
@@ -246,7 +246,7 @@ do
 			--maxins ${maxin} \
 			-1 ${sample}.R1_trim.fastq.gz \
 			-2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.phix.sam &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
+			-S ${sample}.phix.sam 2> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 	else
 		echo "wrong library type"
@@ -393,15 +393,15 @@ if [ "${libraryType}" == "PE" ]; then
 	for sample in ${sampleFiles[*]}
 	do
 		bamPEFragmentSize \
-			-hist fragmentSize.${sample}.png \
+			--histogram QC/fragmentSize/fragmentSize.${sample}.png \
 			--plotTitle ${sample} \
 			--numberOfProcessors ${numberOfProcessors} \
 			--maxFragmentLength ${maxFragmentLength} \
 			--bamfiles ${sample}.dupMark.bam \
-			--samplesLabel ${sample}
+			--samplesLabel ${sample} 2> QC/fragmentSize/fragmentSize.${sample}.log
 		echo ""
 	done
-	mv fragmentSize.*.png QC/fragmentSize
+#	mv fragmentSize.*.png QC/fragmentSize
 fi
 
 # plotFingerprint
@@ -451,9 +451,31 @@ if [ "${libraryType}" == "SE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
+#		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
+#		bamCoverage \
+#			--bam ${sample}.dupMark.bam \
+#			--outFileName ${sample}.dedup.rpkm.bw \
+#			--binSize ${bwBinSize} \
+#			--ignoreDuplicates \
+#			--extendReads ${extendReads} \
+#			--numberOfProcessors ${numberOfProcessors} \
+#			--normalizeUsingRPKM \
+#			--ignoreForNormalization chrM chrX chrY
+#		echo ""
+
+#		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
+#		bamCoverage \
+#			--bam ${sample}.dupMark.bam \
+#			--outFileName ${sample}.dedup.bw \
+#			--binSize ${bwBinSize} \
+#			--ignoreDuplicates \
+#			--extendReads ${extendReads} \
+#			--numberOfProcessors ${numberOfProcessors}
+#		echo ""
+
 		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
-			--bam ${sample}.dupMark.bam \
+			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.rpkm.bw \
 			--binSize ${bwBinSize} \
 			--ignoreDuplicates \
@@ -465,7 +487,7 @@ if [ "${libraryType}" == "SE" ]; then
 
 		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
-			--bam ${sample}.dupMark.bam \
+			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.bw \
 			--binSize ${bwBinSize} \
 			--ignoreDuplicates \
@@ -502,9 +524,31 @@ elif [ "${libraryType}" == "PE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
+#		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
+#		bamCoverage \
+#			--bam ${sample}.dupMark.bam \
+#			--outFileName ${sample}.dedup.rpkm.bw \
+#			--binSize ${bwBinSize} \
+#			--ignoreDuplicates \
+#			--extendReads \
+#			--numberOfProcessors ${numberOfProcessors} \
+#			--normalizeUsingRPKM \
+#			--ignoreForNormalization chrM chrX chrY
+#		echo ""
+
+#		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
+#		bamCoverage \
+#			--bam ${sample}.dupMark.bam \
+#			--outFileName ${sample}.dedup.bw \
+#			--binSize ${bwBinSize} \
+#			--ignoreDuplicates \
+#			--extendReads \
+#			--numberOfProcessors ${numberOfProcessors}
+#		echo ""
+
 		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
-			--bam ${sample}.dupMark.bam \
+			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.rpkm.bw \
 			--binSize ${bwBinSize} \
 			--ignoreDuplicates \
@@ -516,7 +560,7 @@ elif [ "${libraryType}" == "PE" ]; then
 
 		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
-			--bam ${sample}.dupMark.bam \
+			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.bw \
 			--binSize ${bwBinSize} \
 			--ignoreDuplicates \
