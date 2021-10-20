@@ -46,14 +46,16 @@ module load perl
 #######################
 ## parameter setting ##
 #######################
-# library type
-libraryType="PE"
-# SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
-extendReads=200
-# for SE libraries to make bigWig files. No more than 4X read length.
 
 # environment parameters
 numberOfProcessors=16
+
+# library type
+libraryType="PE"
+# SE: single-end libraries, and PE: paired-end libraries; cannot be used for mixed types of libraries
+
+extendReads=200
+# for SE libraries to make bigWig files. No more than 4X read length.
 
 # program parameters
 bwBinSize=10
@@ -71,6 +73,7 @@ reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 # import the sample list
 awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
 awk '{print $0=$0".dupMark.bam"}' < samples.txt > dupMarkBamfiles.txt
+awk '{print $0=$0".dedup.bam"}'   < samples.txt > dedupBamfiles.txt
 
 sampleFiles=$(<samples.txt)
 dupMarkBamfiles=$(<dupMarkBamfiles.txt)
@@ -94,15 +97,17 @@ mkdir -p QC/fragmentSize
 mkdir -p QC/misc
 mkdir -p QC/multiBamSummary
 
-mkdir -p bamFiles
-mkdir -p bamFiles.ecoli
-mkdir -p bamFiles.phix
+mkdir -p bamFiles/dedup
+mkdir -p bamFiles/dupMark
+mkdir -p bamFiles/ecoli
+mkdir -p bamFiles/phix
 
 mkdir -p bigWig/dupMark/rpkm
 mkdir -p bigWig/dupMark/none
 mkdir -p bigWig/dedup/rpkm
 mkdir -p bigWig/dedup/none
 
+mkdir -p summary
 mkdir -p raw
 
 ########################
@@ -134,7 +139,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired} &> QC/fastp/${sample}.fastp.log
+			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
 
 	elif [ "${libraryType}" == "PE" ]; then
 		fastp \
@@ -146,7 +151,7 @@ do
 			-x \
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
-			--length_required ${lengthRequired} &> QC/fastp/${sample}.fastp.log
+			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
 	else
 		echo "wrong library type"
 	fi
@@ -173,7 +178,7 @@ do
 			--local \
 			--very-sensitive-local \
 			-U ${sample}.R1_trim.fastq.gz \
-			-S ${sample}.fastp_trim.sam &> QC/bowtie2_summary/${sample}.bowtie2.txt
+			-S ${sample}.fastp_trim.sam 2> QC/bowtie2_summary/${sample}.bowtie2.txt
 		echo ""
 
 		echo "mapping single-end library of ${sample} to E. coli"
@@ -184,7 +189,7 @@ do
 			--local \
 			--very-sensitive-local \
 			-U ${sample}.R1_trim.fastq.gz \
-			-S ${sample}.ecoli.sam &> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
+			-S ${sample}.ecoli.sam 2> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
 		echo "mapping single-end library of ${sample} to phiX"
@@ -195,7 +200,7 @@ do
 			--local \
 			--very-sensitive-local \
 			-U ${sample}.R1_trim.fastq.gz \
-			-S ${sample}.phix.sam  &> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
+			-S ${sample}.phix.sam  2> QC/bowtie2_summary/${sample}_phix.bowtie2.txt
 		echo ""
 
 	elif [ "${libraryType}" == "PE" ]; then
@@ -258,9 +263,9 @@ do
 
 	rm -f ${sample}.*_trim.fastq.gz
 	rm -f ${sample}.*.sam
-	mv ${sample}.ecoli10.bam bamFiles.ecoli
-	mv ${sample}.phix10.bam  bamFiles.phix
-#	mv ${sample}.chrM.bam    bamFiles.chrM
+	mv ${sample}.ecoli10.bam bamFiles/ecoli
+	mv ${sample}.phix10.bam  bamFiles/phix
+#	mv ${sample}.chrM.bam    bamFiles/chrM
 done
 
 ###################################################################
@@ -291,7 +296,7 @@ do
 		I=${sample}.sorted.bam \
 		O=${sample}.dedup.bam \
 		TMP_DIR=tmp \
-		REMOVE_DUPLICATES=true \
+		REMOVE_DUPLICATES=True \
 		METRICS_FILE=${sample}.dedup.metrics
 	samtools index ${sample}.dedup.bam
 
@@ -304,6 +309,7 @@ do
 	echo ""
 
 	rm -f ${sample}.sorted.bam
+	rm -rf tmp
 	mv *.metrics QC/misc/
 	mv *_bamqc*  QC/bamqc/
 	echo ""
@@ -328,7 +334,7 @@ echo ""
 #echo "plot PCA"
 #plotPCA \
 #	--corData multiBamSummary.results.npz \
-#       --labels ${sampleFiles} \
+#	--labels ${sampleFiles} \
 #	--transpose \
 #	-o PCA_readCounts.png
 #echo ""
@@ -388,7 +394,7 @@ if [ "${libraryType}" == "PE" ]; then
 	do
 		bamPEFragmentSize \
 			-hist fragmentSize.${sample}.png \
-			--plotTitle "Fragment Size" \
+			--plotTitle ${sample} \
 			--numberOfProcessors ${numberOfProcessors} \
 			--maxFragmentLength ${maxFragmentLength} \
 			--bamfiles ${sample}.dupMark.bam \
@@ -530,16 +536,13 @@ fi
 mv *gz           raw
 mv *files.txt    QC/misc/
 mv samples.txt   QC/misc/
-mv *dupMark.bam* bamFiles/
-mv *dedup.bam*   bamFiles.dedup/
-
-rm -rf tmp
+mv *dupMark.bam* bamFiles/dupMark/
+mv *dedup.bam*   bamFiles/dedup/
 
 ############################################
 # writing the summary for mapping pipeline #
 ############################################
 
-mkdir -p summary
 touch summary/summaryTable.txt
 
 echo -e \
@@ -582,5 +585,7 @@ do
 		${B_MULTI_PER}'\t'\
 		${B_UNAL_PER}'\t' >> info/infoTable.tsv
 done
+
+rm -rf tmp
 
 echo "end of mapping"
