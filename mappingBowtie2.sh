@@ -37,7 +37,8 @@ module load picard
 module load fastp
 module load fastqc
 module load multiqc
-module load deeptools/2.5.3
+#module load deeptools/2.5.3
+module load deeptools
 
 # misc
 module load java
@@ -107,7 +108,7 @@ mkdir -p bigWig/dupMark/none
 mkdir -p bigWig/dedup/rpkm
 mkdir -p bigWig/dedup/none
 
-mkdir -p summary
+mkdir -p stats
 mkdir -p raw
 
 ########################
@@ -126,7 +127,7 @@ do
 done
 
 # multiqc to summarize fastqc results
-multiqc -d QC/fastqc -o QC -n multiqc_report -q --no-data-dir
+multiqc -d QC/fastqc -o QC -n multiqc_report_fastqc -q --no-data-dir
 
 for sample in ${sampleFiles[*]}
 do
@@ -152,6 +153,7 @@ do
 			--cut_window_size ${cutWindowSize} \
 			--cut_tail \
 			--length_required ${lengthRequired} 2> QC/fastp/${sample}.fastp.log
+
 	else
 		echo "wrong library type"
 	fi
@@ -168,7 +170,6 @@ done
 for sample in ${sampleFiles[*]}
 do
 	echo "mapping ${sample} with bowtie2"
-
 	if [ "${libraryType}" == "SE" ]; then
 		echo "mapping single-end library of ${sample} to human genome"
 		bowtie2 -t \
@@ -231,7 +232,7 @@ do
 			--maxins ${maxin} \
 			-1 ${sample}.R1_trim.fastq.gz \
 			-2 ${sample}.R2_trim.fastq.gz \
-			-S ${sample}.ecoli.sam  2> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
+			-S ${sample}.ecoli.sam 2> QC/bowtie2_summary/${sample}_ecoli.bowtie2.txt
 		echo ""
 
 		echo "mapping paired-end library of ${sample} to phiX"
@@ -253,19 +254,17 @@ do
 	fi
 
 	echo "filtering ${sample} with the mapping quality < ${mappingQuality}, remove unassembled contigs, mitochrondria, and chrY"
-  
 	sed '/random/d;/chrUn/d;/chrEBV/d;/chrM/d;/chrY/d' < ${sample}.fastp_trim.sam > ${sample}.filtered.sam
-#	samtools view -bSq ${mappingQuality} ${sample}.fastp_trim.sam chrM > ${sample}.chrM.bam
-  	samtools view -bSq ${mappingQuality} ${sample}.filtered.sam        > ${sample}.filtered.bam
-	samtools view -bSq ${mappingQuality} ${sample}.ecoli.sam           > ${sample}.ecoli10.bam
-	samtools view -bSq ${mappingQuality} ${sample}.phix.sam            > ${sample}.phix10.bam
+
+  	samtools view -bSq ${mappingQuality} ${sample}.filtered.sam > ${sample}.filtered.bam
+	samtools view -bSq ${mappingQuality} ${sample}.ecoli.sam    > ${sample}.ecoli10.bam
+	samtools view -bSq ${mappingQuality} ${sample}.phix.sam     > ${sample}.phix10.bam
 	echo ""
 
 	rm -f ${sample}.*_trim.fastq.gz
 	rm -f ${sample}.*.sam
 	mv ${sample}.ecoli10.bam bamFiles/ecoli
 	mv ${sample}.phix10.bam  bamFiles/phix
-#	mv ${sample}.chrM.bam    bamFiles/chrM
 done
 
 ###################################################################
@@ -328,6 +327,7 @@ multiBamSummary bins \
 	--minMappingQuality ${mappingQuality} \
 	-o multiBamSummary.results.npz
 echo ""
+#--blackListFileName ${blackList}
 
 # it might be better to plot PCA in R 
 # --transpose can be used after version 3
@@ -420,12 +420,12 @@ plotFingerprint \
 mv fingerprints.*     QC/misc/
 mv qualityMetrics.tab QC/misc/
 
-###############################################################################################################
-## coverage: to generate a sequencing-depth-normalized continuous profile of read coverages (BAM --> bigWig) ##
-###############################################################################################################
+##############################################################################################################
+## coverage: to generate a sequencing-depth-normalized continuous profile of read coverages (BAM -> bigWig) ##
+##############################################################################################################
 
 echo "making bigWig files"
-echo "binSize: ${bwBinSize} and ignore chrX, chrY, and chrM for normalization"
+echo "binSize: ${bwBinSize} and ignore chrX for normalization"
 echo ""
 
 if [ "${libraryType}" == "SE" ]; then
@@ -438,8 +438,8 @@ if [ "${libraryType}" == "SE" ]; then
 			--binSize ${bwBinSize} \
 			--extendReads ${extendReads} \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsingRPKM \
-			--ignoreForNormalization chrM chrX chrY
+			--normalizeUsing RPKM \
+			--ignoreForNormalization chrX
 		echo ""
 
 		echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
@@ -460,7 +460,7 @@ if [ "${libraryType}" == "SE" ]; then
 #			--extendReads ${extendReads} \
 #			--numberOfProcessors ${numberOfProcessors} \
 #			--normalizeUsingRPKM \
-#			--ignoreForNormalization chrM chrX chrY
+#			--ignoreForNormalization chrX
 #		echo ""
 
 #		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
@@ -482,7 +482,7 @@ if [ "${libraryType}" == "SE" ]; then
 			--extendReads ${extendReads} \
 			--numberOfProcessors ${numberOfProcessors} \
 			--normalizeUsingRPKM \
-			--ignoreForNormalization chrM chrX chrY
+			--ignoreForNormalization chrX
 		echo ""
 
 		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
@@ -511,8 +511,8 @@ elif [ "${libraryType}" == "PE" ]; then
 			--binSize ${bwBinSize} \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsingRPKM \
-			--ignoreForNormalization chrM chrX chrY
+			--normalizeUsing RPKM \
+			--ignoreForNormalization chrX
 		echo ""
 
 		echo "generating unnormalized bigwig files of ${sample} w/ duplicates"
@@ -533,7 +533,7 @@ elif [ "${libraryType}" == "PE" ]; then
 #			--extendReads \
 #			--numberOfProcessors ${numberOfProcessors} \
 #			--normalizeUsingRPKM \
-#			--ignoreForNormalization chrM chrX chrY
+#			--ignoreForNormalization chrX
 #		echo ""
 
 #		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
@@ -554,8 +554,8 @@ elif [ "${libraryType}" == "PE" ]; then
 			--ignoreDuplicates \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsingRPKM \
-			--ignoreForNormalization chrM chrX chrY
+			--normalizeUsing RPKM \
+			--ignoreForNormalization chrX
 		echo ""
 
 		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
@@ -587,47 +587,43 @@ mv *dedup.bam*   bamFiles/dedup/
 # writing the summary for mapping pipeline #
 ############################################
 
-touch summary/summaryTable.txt
+touch stats/statsTable.tsv
 
 echo -e \
 	library'\t'\
 	rawReads'\t'\
+	duplicateRates'\t'\
 	passedFiltersReads'\t'\
 	alignConcordant'\t'\
 	alignMulti'\t'\
 	Unalign'\t'\
-	alignOverallMap%'\t'\
 	alignConcordant%'\t'\
 	alignMulti%'\t'\
-	alignUnal%'\t'\
-	uniqueMapped'\t' >> info/infoTable.tsv
+	alignOverallMap%'\t' >> stats/statsTable.tsv
 	
 for sample in ${sampleFiles[*]}
 do
-	rawReads=$(cat        QC/fastp/${sample}.fastp.log             | grep "total reads:"                         | head -n 1 | awk '{print $3}')
-	passedReads=$(cat     QC/bowtie2_summary/${sample}.bowtie2.txt | grep "reads; of these:$"                                | awk '{print $1}')
-	alignConcordant=$(cat QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly exactly 1 time$"             | awk '{print $1}')
-	alignMulti=$(cat      QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly >1 times$"                   | awk '{print $1}')
-	unAlign=$(cat         QC/bowtie2_summary/${sample}.bowtie2.txt | grep "aligned concordantly 0 times$"                    | awk '{print $1}')
-	B_OAP=$(cat           QC/bowtie2_summary/${sample}.bowtie2.txt | grep "overall alignment rate$"                          | awk '{print $1}')
-	
-	
-	
-	B_CONC_PER=$(echo ${B_CONC}"/"${PASSED_FILTERS}"*100"   | bc -l)%
-	B_MULTI_PER=$(echo ${B_MULTI}"/"${PASSED_FILTERS}"*100" | bc -l)%
-	B_UNAL_PER=$(echo ${B_UNAL}"/"${PASSED_FILTERS}"*100"   | bc -l)%
+	rawReads=$(cat        QC/fastp/${sample}.fastp.log              | grep "total reads:"                         | head -n 1 | awk '{print $3}')
+	duplicateRate=$(cat   QC/fastp/${sample}.fastp.log              | grep "Duplication rate: "                   | head -n 1 | awk '{print $3}')
+	passedReads=$(cat     QC/bowtie2_summary/${sample}.bowtie2.txt  | grep "reads; of these:$"                                | awk '{print $1}')
+	alignConcordant=$(cat QC/bowtie2_summary/${sample}.bowtie2.txt  | grep "aligned concordantly exactly 1 time$"             | awk '{print $1}')
+	alignMulti=$(cat      QC/bowtie2_summary/${sample}.bowtie2.txt  | grep "aligned concordantly >1 times$"                   | awk '{print $1}')
+	unAlign=$(cat         QC/bowtie2_summary/${sample}.bowtie2.txt  | grep "aligned concordantly 0 times$"                    | awk '{print $1}')
+	mappingRate=$(cat     QC/bowtie2_summary/${sample}.bowtie2.txt  | grep "overall alignment rate$"                          | awk '{print $1}')
+	concPercent=$(echo    ${alignConcordant}"/"${passedReads}"*100" | bc -l)%
+	multiPercent=$(echo   ${alignMulti}"/"${passedReads}"*100"      | bc -l)%
 
 	echo -e \
 		${sample}'\t'\
 		${rawReads}'\t'\
+		${duplicateRate}'\t'\
 		${passedReads}'\t'\
 		${alignConcordant}'\t'\
 		${alignMulti}'\t'\
 		${unAlign}'\t'\
-		${B_OAP}'\t'\
-		${B_CONC_PER}'\t'\
-		${B_MULTI_PER}'\t'\
-		${B_UNAL_PER}'\t' >> info/infoTable.tsv
+		${concPercent}'\t'\
+		${multiPercent}'\t'\
+		${mappingRate}'\t' >> stats/statsTable.tsv
 done
 
 rm -rf tmp
