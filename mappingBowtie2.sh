@@ -36,9 +36,7 @@ module load picard
 # QC and visualization
 module load fastp
 module load fastqc
-module load multiqc
-#module load deeptools/2.5.3
-module load deeptools
+module load deeptools/2.5.3
 
 # misc
 module load java
@@ -125,9 +123,6 @@ do
 	echo ""
 	#--threads $(echo ${numberOfProcessors}/2 | bc) \
 done
-
-# multiqc to summarize fastqc results
-multiqc -d QC/fastqc -o QC -n multiqc_report_fastqc -q --no-data-dir
 
 for sample in ${sampleFiles[*]}
 do
@@ -451,34 +446,11 @@ if [ "${libraryType}" == "SE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
-#		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
-#		bamCoverage \
-#			--bam ${sample}.dupMark.bam \
-#			--outFileName ${sample}.dedup.rpkm.bw \
-#			--binSize ${bwBinSize} \
-#			--ignoreDuplicates \
-#			--extendReads ${extendReads} \
-#			--numberOfProcessors ${numberOfProcessors} \
-#			--normalizeUsingRPKM \
-#			--ignoreForNormalization chrX
-#		echo ""
-
-#		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
-#		bamCoverage \
-#			--bam ${sample}.dupMark.bam \
-#			--outFileName ${sample}.dedup.bw \
-#			--binSize ${bwBinSize} \
-#			--ignoreDuplicates \
-#			--extendReads ${extendReads} \
-#			--numberOfProcessors ${numberOfProcessors}
-#		echo ""
-
 		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
 			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.rpkm.bw \
 			--binSize ${bwBinSize} \
-			--ignoreDuplicates \
 			--extendReads ${extendReads} \
 			--numberOfProcessors ${numberOfProcessors} \
 			--normalizeUsingRPKM \
@@ -490,7 +462,6 @@ if [ "${libraryType}" == "SE" ]; then
 			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.bw \
 			--binSize ${bwBinSize} \
-			--ignoreDuplicates \
 			--extendReads ${extendReads} \
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
@@ -524,34 +495,11 @@ elif [ "${libraryType}" == "PE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
-#		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
-#		bamCoverage \
-#			--bam ${sample}.dupMark.bam \
-#			--outFileName ${sample}.dedup.rpkm.bw \
-#			--binSize ${bwBinSize} \
-#			--ignoreDuplicates \
-#			--extendReads \
-#			--numberOfProcessors ${numberOfProcessors} \
-#			--normalizeUsingRPKM \
-#			--ignoreForNormalization chrX
-#		echo ""
-
-#		echo "generating unnormalized bigwig files of ${sample} w/o duplicates"
-#		bamCoverage \
-#			--bam ${sample}.dupMark.bam \
-#			--outFileName ${sample}.dedup.bw \
-#			--binSize ${bwBinSize} \
-#			--ignoreDuplicates \
-#			--extendReads \
-#			--numberOfProcessors ${numberOfProcessors}
-#		echo ""
-
 		echo "generating normalized (RPKM) bigwig files of ${sample} w/o duplicates"
 		bamCoverage \
 			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.rpkm.bw \
 			--binSize ${bwBinSize} \
-			--ignoreDuplicates \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors} \
 			--normalizeUsing RPKM \
@@ -563,7 +511,6 @@ elif [ "${libraryType}" == "PE" ]; then
 			--bam ${sample}.dedup.bam \
 			--outFileName ${sample}.dedup.bw \
 			--binSize ${bwBinSize} \
-			--ignoreDuplicates \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
@@ -625,6 +572,14 @@ do
 		${multiPercent}'\t'\
 		${mappingRate}'\t' >> stats/statsTable.tsv
 done
+
+# multiqc to summarize fastqc, fastp, and bamqc
+module unload python
+module load multiqc
+
+multiqc -d QC/fastqc -o QC -n multiqc_report_fastqc -q --no-data-dir
+multiqc -d QC/fastp  -o QC -n multiqc_report_fastp  -q --no-data-dir
+multiqc -d QC/bamqc  -o QC -n multiqc_report_bamqc  -q --no-data-dir
 
 rm -rf tmp
 
