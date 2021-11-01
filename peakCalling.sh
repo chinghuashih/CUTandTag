@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p standard  -o peaksCalling.log -t 08:00:00
-#SBATCH -c 8 --mem=96G
+#SBATCH -c 8 --mem=128G
 
 module load bedtools
 module load R
@@ -17,7 +17,7 @@ AUC=0.01
 # macs2 parameters
 inputFormat="auto"
 # bam for BAMPE; bed for BEDPE; auto if not sure
-g="hs"
+genome="hs"
 qvalue=0.05
 
 echo "peak calling using ${peakCalling}"
@@ -33,7 +33,7 @@ if [ "${peakCalling}" == "SEACR" ]; then
     while read exp
     do
         echo ${exp}
-        IFS=' ' read -r -a array <<< "$exp"
+        IFS=' ' read -r -a array <<< "${exp}"
 
         sample=${array[0]}
         control=${array[1]}
