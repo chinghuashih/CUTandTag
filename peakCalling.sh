@@ -55,10 +55,10 @@ if [ "${peakCalling}" == "SEACR" ]; then
             ## peakcalling with the stringent threshold ##
             ##############################################
             echo "peakCalls for ${sample} using normalized ${control} as the control track with stringent threshold"
-            bash SEACR_1.2.sh ${sample}.bedgraph ${control}.bedgraph norm stringent ${sample}.stringent_norm
+            bash SEACR_1.3.sh ${sample}.bedgraph ${control}.bedgraph norm stringent ${sample}.stringent_norm
  
             echo "peakCalls for ${sample} using unnormalized ${control} as the control track with stringent threshold"
-            bash SEACR_1.2.sh ${sample}.bedgraph ${control}.bedgraph non stringent ${sample}.stringent_non
+            bash SEACR_1.3.sh ${sample}.bedgraph ${control}.bedgraph non stringent ${sample}.stringent_non
             
             echo ""
 
@@ -66,17 +66,17 @@ if [ "${peakCalling}" == "SEACR" ]; then
             ## peakcalling with the relaxed threshold ##
             ############################################
             echo "peakCalls for ${sample} using normalized ${control} as the control track with relaxed threshold"
-            bash SEACR_1.2.sh ${sample}.bedgraph ${control}.bedgraph norm relaxed ${sample}.relaxed_norm
+            bash SEACR_1.3.sh ${sample}.bedgraph ${control}.bedgraph norm relaxed ${sample}.relaxed_norm
 
             echo "peakCalls for ${sample} using unnormalized ${control} as the control track with relaxed threshold"
-            bash SEACR_1.2.sh ${sample}.bedgraph ${control}.bedgraph non relaxed ${sample}.relaxed_non
+            bash SEACR_1.3.sh ${sample}.bedgraph ${control}.bedgraph non relaxed ${sample}.relaxed_non
                 
             echo ""
 
         elif [ "${control}" == "NA" ]; then
         
             echo "peakCalls for ${sample} by selecting the top ${AUC} of regions by AUC"
-            bash SEACR_1.2.sh ${sample}.bedgraph ${AUC} norm stringent ${sample}.AUC
+            bash SEACR_1.3.sh ${sample}.bedgraph ${AUC} norm stringent ${sample}.AUC
             
             echo ""
             
