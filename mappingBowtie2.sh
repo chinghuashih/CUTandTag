@@ -393,7 +393,7 @@ if [ "${libraryType}" == "PE" ]; then
 			--numberOfProcessors ${numberOfProcessors} \
 			--maxFragmentLength ${maxFragmentLength} \
 			--bamfiles ${sample}.dupMark.bam \
-			--samplesLabel ${sample} 2> QC/fragmentSize/fragmentSize.${sample}.log
+			--samplesLabel ${sample}
 		echo ""
 	done
 #	mv fragmentSize.*.png QC/fragmentSize
@@ -579,7 +579,6 @@ module load multiqc
 
 multiqc -d QC/fastqc -o QC -n multiqc_report_fastqc -q --no-data-dir
 multiqc -d QC/fastp  -o QC -n multiqc_report_fastp  -q --no-data-dir
-multiqc -d QC/bamqc  -o QC -n multiqc_report_bamqc  -q --no-data-dir
 
 rm -rf tmp
 
