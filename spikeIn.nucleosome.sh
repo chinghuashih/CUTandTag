@@ -6,19 +6,21 @@
 # EpiCypher considers an antibody with <20% binding to all off-target PTMs specific and suitable for downstream data analysis. 
 # For IgG, data is normalized to the sum of total barcode reads.
 
+module load R/4.1.1
+
 sampleFiles=$(<samples.txt)
+
+mkdir -p spikeIn
 
 echo -e \
 	sample"\t"\
 	raw_counts"\t"\
 	barcode"\t"\
 	R1.count"\t"\
-	R2.count > spikeIn.counts.txt
+	R2.count > spikeIn/spikeIn.counts.txt
 
 for sample in ${sampleFiles[*]}
 do
-	echo "${sample}"
-
 	counts=$(zcat ${sample}.R1.fastq.gz | wc -l)
 	counts=$(echo ${counts}"/4" | bc -l)
 
@@ -40,22 +42,21 @@ do
 		CGATACGCCGATCGATCGTCGG CCGCGCGATAAGACGCGTAACG \
 		CGATTCGACGGTCGCGACCGTA TTTCGACGCGTCGATTCGGCGA ;
 	do
+
+		echo "${sample}	${barcode}"
+
 		R1count=$(zcat ${sample}.R1.fastq.gz | grep -c ${barcode})
 		R2count=$(zcat ${sample}.R2.fastq.gz | grep -c ${barcode})
+
 		echo -e \
 			${sample}"\t"\
 			${counts}"\t"\
 			${barcode}"\t"\
 			${R1count}"\t"\
-			${R2count} >> spikeIn.counts.txt
+			${R2count} >> spikeIn/spikeIn.counts.txt
 	done
 done
 
+Rscript --vanilla spikeIn.nucleosome.R
 
-
-
-
-
-
-
-
+echo "end of spikeIn counting"
