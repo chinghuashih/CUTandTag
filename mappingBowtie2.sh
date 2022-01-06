@@ -72,6 +72,8 @@ reference="/scratch/cshih8/references/hg38/bowtie2_index/default/hg38"
 reference_ecoli="/home/cshih8/references/ecoli_bowtie2/ecoli"
 reference_phix="/home/cshih8/references/phix_bowtie2/phix"
 
+igvtools="~/tools/IGV_2.11.3/igvtools count"
+
 # import the sample list
 awk '{print $0=$0".bam"}'         < samples.txt > bamfiles.txt
 awk '{print $0=$0".dupMark.bam"}' < samples.txt > dupMarkBamfiles.txt
@@ -309,7 +311,7 @@ do
 	echo ""
 
 	rm -f ${sample}.sorted.bam
-	rm -rf tmp
+	rm -rf tmp~/tools/IGV_2.11.3/igvtools count
 	mv *.metrics QC/misc/
 	mv *_bamqc*  QC/bamqc/
 	echo ""
@@ -472,8 +474,8 @@ if [ "${libraryType}" == "SE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
-		~/tools/IGV_2.11.3/igvtools count -z ${zoom} -w ${bwBinSize} ${sample}.dupMark.bam ${sample}.dupMark.tdf ${genome}
-		~/tools/IGV_2.11.3/igvtools count -z ${zoom} -w ${bwBinSize} ${sample}.dedup.bam   ${sample}.dedup.tdf   ${genome}
+		${igvtools} count -z ${zoom} -w ${bwBinSize} ${sample}.dupMark.bam ${sample}.dupMark.tdf ${genome}
+		${igvtools} count -z ${zoom} -w ${bwBinSize} ${sample}.dedup.bam   ${sample}.dedup.tdf   ${genome}
 
 		mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
 		mv ${sample}.dupMark.bw      bigWig/dupMark/none
@@ -527,9 +529,8 @@ elif [ "${libraryType}" == "PE" ]; then
 			--numberOfProcessors ${numberOfProcessors}
 		echo ""
 
-		~/tools/IGV_2.11.3/igvtools count -z ${zoom} -w ${bwBinSize} ${sample}.dupMark.bam ${sample}.dupMark.tdf ${genome}
-		~/tools/IGV_2.11.3/igvtools count -z ${zoom} -w ${bwBinSize} ${sample}.dedup.bam   ${sample}.dedup.tdf   ${genome}
-
+		${igvtools} count -z ${zoom} -w ${bwBinSize} ${sample}.dupMark.bam ${sample}.dupMark.tdf ${genome}
+		${igvtools} count -z ${zoom} -w ${bwBinSize} ${sample}.dedup.bam   ${sample}.dedup.tdf   ${genome}
 
 		mv ${sample}.dupMark.rpkm.bw bigWig/dupMark/rpkm
 		mv ${sample}.dupMark.bw      bigWig/dupMark/none
