@@ -92,7 +92,7 @@ if [ "${peakCalling}" == "SEACR" ]; then
 
 elif [ "${peakCalling}" == "MACS2" ]; then
 
-    moduel load macs2
+    module load macs2
     
     outdir="peaks_macs2"
     
