@@ -25,30 +25,30 @@ echo ""
 
 if [ "${peakCalling}" == "SEACR" ]; then
 
-    # SEACR requires paired-end sequencing as inputs, both for experiments and the control(IgG) if having IgG as the control.
+	# SEACR requires paired-end sequencing as inputs, both for experiments and the control(IgG) if having IgG as the control.
 
-    mkdir -p peaks_SEACR/bedgraph
-    mkdir -p peaks_SEACR/bed
-    
-    while read exp
-    do
-        echo ${exp}
-        IFS=' ' read -r -a array <<< "${exp}"
+	mkdir -p peaks_SEACR/bedgraph
+	mkdir -p peaks_SEACR/bed
 
-        sample=${array[0]}
-        control=${array[1]}
+	while read exp
+	do
+		echo ${exp}
+		IFS=' ' read -r -a array <<< "${exp}"
 
-        echo "treatment: ${sample}"
-        echo "control: ${control}"
+		sample=${array[0]}
+		control=${array[1]}
 
-        echo "Preparing bedgraph files: ${sample} and ${control}"
-        # experiments
-        bedtools genomecov -ibam ${sample}.${dupType}.bam -bg > ${sample}.bedgraph
-        
-        if [ "${control}" != "NA" ]; then
-            # control
-            bedtools genomecov -ibam ${control}.${dupType}.bam -bg > ${control}.bedgraph
-        fi
+		echo "treatment: ${sample}"
+		echo "control: ${control}"
+
+		echo "Preparing bedgraph files: ${sample} and ${control}"
+		# experiments
+		bedtools genomecov -ibam ${sample}.${dupType}.bam -bg > ${sample}.bedgraph
+
+		if [ "${control}" != "NA" ]; then
+			# control
+			bedtools genomecov -ibam ${control}.${dupType}.bam -bg > ${control}.bedgraph
+		fi
         
         if [ "${control}" != "NA" ]; then
             ##############################################
