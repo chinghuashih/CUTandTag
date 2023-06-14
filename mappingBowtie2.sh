@@ -435,7 +435,7 @@ if [ "${libraryType}" == "SE" ]; then
 			--binSize ${bwBinSize} \
 			--extendReads ${extendReads} \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsing RPKM \
+			--normalizeUsingRPKM \
 			--ignoreForNormalization chrX
 		echo ""
 
@@ -485,7 +485,7 @@ elif [ "${libraryType}" == "PE" ]; then
 			--binSize ${bwBinSize} \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsing RPKM \
+			--normalizeUsingRPKM \
 			--ignoreForNormalization chrX
 		echo ""
 
@@ -505,7 +505,7 @@ elif [ "${libraryType}" == "PE" ]; then
 			--binSize ${bwBinSize} \
 			--extendReads \
 			--numberOfProcessors ${numberOfProcessors} \
-			--normalizeUsing RPKM \
+			--normalizeUsingRPKM \
 			--ignoreForNormalization chrX
 		echo ""
 
