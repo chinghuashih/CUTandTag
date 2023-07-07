@@ -32,8 +32,8 @@ slide=50
 minwidth=100
 # Minimum width (bp) of a peak. Default: 150
 
---broad      Run GoPeaks on broad marks (--step 5000 & --slide 1000)
---prefix     Output prefix to write peaks and metrics file. Default: sample
+#--broad      Run GoPeaks on broad marks (--step 5000 & --slide 1000)
+#--prefix     Output prefix to write peaks and metrics file. Default: sample
 
 echo "peak calling using ${peakCalling}"
 echo ""
@@ -223,101 +223,8 @@ elif [ "${peakCalling}" == "MACS2" ]; then
 elif [ "${peakCalling}" == "GoPeaks" ]; then
 
     outdir="peaks_GoPeaks"
-    
-    mkdir -p ${outdir}/
     mkdir -p ${outdir}/broadPeak
     
-    echo "Samples for peak-calling are:"
-    echo ${sampleFiles}
-    echo "libraryType: ${inputFormat}"
-    echo "output files are saved into ${outdir}"
-
-    while read exp
-    do
-        echo ${exp}
-        IFS=' ' read -r -a array <<< "${exp}"
-
-        sample=${array[0]}
-        control=${array[1]}
-
-        echo "treatment: ${sample}"
-        echo "control: ${control}"
-
-        if [ "${control}" != "NA" ]; then
-
-                # calling peaks
-                echo "calling broad peaks: ${sample} with ${control}"
-                macs2 callpeak \
-                        --format ${format} \
-                        --treatment ${sample}.${dupType}.bam \
-                        --control ${control}.${dupType}.bam \
-                        --name ${sample} \
-                        --outdir ${outdir} \
-                        --broad \
-                        -g ${g} \
-                        -q ${qvalue} \
-                        -B \
-                        --SPMR \
-                        --nomodel
-                echo ""               
-                
-                echo "calling narrow peaks: ${sample} with ${control}"
-                macs2 callpeak \
-                        --format ${format} \
-                        --treatment ${sample}.${dupType}.bam \
-                        --control ${control}.${dupType}.bam \
-                        --name ${sample} \
-                        --outdir ${outdir} \
-                        -g ${g} \
-                        -q ${qvalue} \
-                        -B \
-                        --SPMR \
-                        --nomodel
-                echo ""
-                
-        elif [ "${control}" == "NA" ]; then
-
-            # calling peaks without control
-            echo "calling broad peaks: ${sample} without control"
-            macs2 callpeak \
-                --format ${format} \
-                --treatment ${sample}.${dupType}.bam \
-                --name ${sample}.noctrl \
-                --outdir ${outdir} \
-                --broad \
-                -g ${g} \
-                -q ${qvalue} \
-                -B \
-                --SPMR \
-                --nomodel
-            echo ""
-
-            echo "calling narrow peaks: ${sample} without control"
-            macs2 callpeak \
-                --format ${format} \
-                --treatment ${sample}.${dupType}.bam \
-                --name ${sample}.noctrl \
-                --outdir ${outdir} \
-                -g ${g} \
-                -q ${qvalue} \
-                -B \
-                --SPMR \
-                --nomodel
-            echo ""
-        fi
-    done <samplesPeaks.txt
-
-    cd ${dir}
-    gzip *bdg
-
-    mv *.bdg.gz     bedgraph
-    mv *.broadPeak  broadPeak
-    mv *.gappedPeak gappedPeak
-    mv *.narrowPeak narrowPeak
-    mv *.xls        xls
-    mv *.summits*   summits
-
-    cd ..
 
 else
     echo "wrong peak calling algorithm"
