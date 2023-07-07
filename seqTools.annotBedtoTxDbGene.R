@@ -49,11 +49,11 @@ annotBedtoTxDbGene = function(bed, tx, org = c(NULL), prefix = c(NULL), promUp =
 	#Assign ts name to annotation column (AnnotCol) "tx"
 	bed@elementMetadata[[paste0(prefix, ".ts")]][queryHits(closeTs)]  = ts@elementMetadata$TXNAME[subjectHits(closeTs)]
  	bed@elementMetadata[paste0(prefix, ".tsKg")]                      = select(
- 																				tx,
- 																				keytype = "TXNAME",
- 																				keys    = as.character(bed@elementMetadata[[paste0(prefix, ".ts")]]),
- 																				columns = "GENEID"
- 																				)$GENEID
+ 											tx,
+ 											keytype = "TXNAME",
+ 											keys    = as.character(bed@elementMetadata[[paste0(prefix, ".ts")]]),
+ 											columns = "GENEID"
+ 											)$GENEID
 
 	bed@elementMetadata[[paste0(prefix, ".tsStart")]][ queryHits(closeTs)] = start(ts)[subjectHits(closeTs)]
 	bed@elementMetadata[[paste0(prefix, ".tsEnd")]][   queryHits(closeTs)] = end(ts)[subjectHits(closeTs)]
