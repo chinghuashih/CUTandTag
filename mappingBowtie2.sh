@@ -123,7 +123,6 @@ do
 		--outdir QC/fastqc \
 		--quiet
 	echo ""
-	#--threads $(echo ${numberOfProcessors}/2 | bc) \
 done
 
 for sample in ${sampleFiles[*]}
